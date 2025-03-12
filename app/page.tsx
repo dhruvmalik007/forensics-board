@@ -12,7 +12,7 @@ export default function Page() {
 
   useEffect(() => {
     if (ready && authenticated) {
-      router.push('/chat');
+      router.push('/dashboard');
     }
   }, [ready, authenticated, router]);
 
@@ -70,9 +70,9 @@ export default function Page() {
             >
               Get Started
             </button>
-            <Link href="#features">
-              <button className="bg-transparent border border-gray-600 hover:border-gray-400 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors">
-                Learn More
+            <Link href="/dashboard">
+              <button className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors">
+                Try Testing
               </button>
             </Link>
           </div>
@@ -169,12 +169,19 @@ export default function Page() {
           <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-10">
             Sign in now to access powerful blockchain forensics tools and start analyzing on-chain activities.
           </p>
-          <button
-            onClick={() => login()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
-          >
-            Sign In with Email
-          </button>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <button
+              onClick={() => login()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
+            >
+              Sign In with Email
+            </button>
+            <Link href="/dashboard">
+              <button className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors">
+                Test Without Signing In
+              </button>
+            </Link>
+          </div>
         </div>
       </section>
 

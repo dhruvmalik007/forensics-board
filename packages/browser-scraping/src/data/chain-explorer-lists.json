@@ -1,0 +1,159 @@
+[
+    {
+      "project_name": "Hyperlane",
+      "explorer_url": "https://explorer.hyperlane.xyz/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "LayerZero",
+      "explorer_url": "https://layerzeroscan.com/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Connext",
+      "explorer_url": "https://connextscan.io/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Stargate",
+      "explorer_url": "https://stargate.finance/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Synapse Protocol",
+      "explorer_url": "https://explorer.synapseprotocol.com/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Hop",
+      "explorer_url": "https://explorer.hop.exchange/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Axelar",
+      "explorer_url": "https://axelarscan.io/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Wormhole",
+      "explorer_url": "https://wormholescan.io/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Router Protocol",
+      "explorer_url": "https://explorer.routerprotocol.com/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "deBridge",
+      "explorer_url": "https://explorer.debridge.finance/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Allbridge Core",
+      "explorer_url": "https://app.allbridge.io/transactions",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Across",
+      "explorer_url": "https://across.to/explorer",
+      "category": "intent-bridge"
+    },
+    {
+      "project_name": "Orbiter Finance",
+      "explorer_url": "https://orbiter.finance/explorer",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Owlto Finance",
+      "explorer_url": "https://owlto.finance/explorer",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Wanchain Bridge",
+      "explorer_url": "https://www.wanscan.org/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Polyhedra Network",
+      "explorer_url": "https://zkbridge.com/explorer",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Symbiosis",
+      "explorer_url": "https://explorer.symbiosis.finance/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "ChainPort",
+      "explorer_url": "https://explorer.chainport.io/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Everclear",
+      "explorer_url": "https://explorer.everclear.org/intents",
+      "category": "intent-bridge"
+    },
+    {
+      "project_name": "LI.FI",
+      "explorer_url": "https://scan.li.fi/",
+      "category": "crosschain-txn"
+    },
+    {
+      "project_name": "Arkham Intelligence",
+      "explorer_url": "https://intel.arkm.com/",
+      "category": "intel-txn"
+    },
+    {
+      "project_name": "Chainalysis",
+      "explorer_url": "https://www.chainalysis.com/",
+      "category": "intel-txn"
+    },
+    {
+      "project_name": "Elliptic",
+      "explorer_url": "https://www.elliptic.co/",
+      "category": "intel-txn"
+    },
+    {
+      "project_name": "Etherscan",
+      "explorer_url": "https://etherscan.io/",
+      "category": "chain-explorer",
+      "chain": "ethereum"
+    },
+    {
+      "project_name": "BscScan",
+      "explorer_url": "https://bscscan.com/",
+      "category": "chain-explorer",
+      "chain": "binance"
+    },
+    {
+      "project_name": "PolygonScan",
+      "explorer_url": "https://polygonscan.com/",
+      "category": "chain-explorer",
+      "chain": "polygon"
+    },
+    {
+      "project_name": "Arbiscan",
+      "explorer_url": "https://arbiscan.io/",
+      "category": "chain-explorer",
+      "chain": "arbitrum"
+    },
+    {
+      "project_name": "Optimism Explorer",
+      "explorer_url": "https://optimistic.etherscan.io/",
+      "category": "chain-explorer",
+      "chain": "optimism"
+    },
+    {
+      "project_name": "Avalanche Explorer",
+      "explorer_url": "https://snowtrace.io/",
+      "category": "chain-explorer",
+      "chain": "avalanche"
+    },
+    {
+      "project_name": "Fantom Explorer",
+      "explorer_url": "https://ftmscan.com/",
+      "category": "chain-explorer",
+      "chain": "fantom"
+    }
+  ] 

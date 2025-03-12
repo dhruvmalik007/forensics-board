@@ -30,6 +30,7 @@ import { imageArtifact } from '@/artifacts/image/client';
 import { codeArtifact } from '@/artifacts/code/client';
 import { sheetArtifact } from '@/artifacts/sheet/client';
 import { textArtifact } from '@/artifacts/text/client';
+import { blockchainExplorerArtifact } from '@/artifacts/blockchain-explorer/client';
 import equal from 'fast-deep-equal';
 
 export const artifactDefinitions = [
@@ -37,6 +38,7 @@ export const artifactDefinitions = [
   codeArtifact,
   imageArtifact,
   sheetArtifact,
+  blockchainExplorerArtifact,
 ];
 export type ArtifactKind = (typeof artifactDefinitions)[number]['kind'];
 
