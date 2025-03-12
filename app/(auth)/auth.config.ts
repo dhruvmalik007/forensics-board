@@ -2,7 +2,7 @@ import type { NextAuthConfig } from 'next-auth';
 
 export const authConfig = {
   pages: {
-    signIn: '/login',
+    signIn: '/',
     newUser: '/',
   },
   providers: [
@@ -12,25 +12,30 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnChat = nextUrl.pathname.startsWith('/');
+      const isOnChat = nextUrl.pathname.startsWith('/chat');
       const isOnRegister = nextUrl.pathname.startsWith('/register');
-      const isOnLogin = nextUrl.pathname.startsWith('/login');
+      const isOnCallback = nextUrl.pathname.startsWith('/callback');
+      const isOnRoot = nextUrl.pathname === '/';
 
-      if (isLoggedIn && (isOnLogin || isOnRegister)) {
-        return Response.redirect(new URL('/', nextUrl as unknown as URL));
+      // Since we can't access cookies here, we'll rely on the auth object
+      // The middleware will handle Privy token checks
+      const isEffectivelyLoggedIn = isLoggedIn;
+
+      if (isEffectivelyLoggedIn && (isOnRoot || isOnRegister)) {
+        return Response.redirect(new URL('/chat', nextUrl as unknown as URL));
       }
 
-      if (isOnRegister || isOnLogin) {
-        return true; // Always allow access to register and login pages
+      if (isOnRegister || isOnCallback || isOnRoot) {
+        return true; // Always allow access to register, callback, and root pages
       }
 
       if (isOnChat) {
-        if (isLoggedIn) return true;
+        if (isEffectivelyLoggedIn) return true;
         return false; // Redirect unauthenticated users to login page
       }
 
-      if (isLoggedIn) {
-        return Response.redirect(new URL('/', nextUrl as unknown as URL));
+      if (isEffectivelyLoggedIn) {
+        return Response.redirect(new URL('/chat', nextUrl as unknown as URL));
       }
 
       return true;

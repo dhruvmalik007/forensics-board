@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
 
 import { ThemeProvider } from '@/components/theme-provider';
+import { PrivyAuthProvider } from '@/components/privy-provider';
 
 import './globals.css';
 
@@ -63,8 +64,10 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Toaster position="top-center" />
-          {children}
+          <PrivyAuthProvider>
+            <Toaster position="top-center" />
+            {children}
+          </PrivyAuthProvider>
         </ThemeProvider>
       </body>
     </html>
