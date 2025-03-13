@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import BlockchainExplorerArtifactActions from '@/artifacts/blockchain-explorer/artifact-actions';
 import { blockchainExplorerArtifact } from '@/artifacts/blockchain-explorer/client';
 import { ProcessViewer, defaultBlockchainExplorationSteps } from '@/components/blockchain-explorer/process-viewer';
+import { usePrivyAuthWithDB } from '@/hooks/use-privy-auth-with-db';
+import { useBlockchainExploration } from '@/hooks/use-blockchain-exploration';
 
 // Define types for the artifact
 interface UIArtifact {
@@ -33,6 +35,10 @@ interface UIArtifact {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const documentIdParam = searchParams.get('documentId');
+  const { user } = usePrivyAuthWithDB();
+  
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showArtifact, setShowArtifact] = useState(false);
@@ -48,6 +54,69 @@ export default function DashboardPage() {
   
   // Find blockchain explorer artifact if it exists
   const blockchainArtifact = artifacts?.find((a) => a.kind === 'blockchain-explorer');
+  
+  // Get blockchain explorations using the hook
+  const { explorations, currentExploration, getExplorations } = useBlockchainExploration({
+    privyDID: user?.id || '',
+  });
+  
+  // Load explorations when the component mounts or user changes
+  useEffect(() => {
+    if (user?.id) {
+      getExplorations();
+    }
+  }, [user?.id, getExplorations]);
+  
+  // Load the exploration data if documentId is provided
+  useEffect(() => {
+    if (documentIdParam && explorations.length > 0) {
+      const exploration = explorations.find(e => e.documentId === documentIdParam);
+      
+      if (exploration) {
+        // Create the artifact from the exploration data
+        const newArtifact: UIArtifact = {
+          title: `Blockchain Explorer: ${exploration.address ? exploration.address.substring(0, 8) : 'Query'}...`,
+          documentId: exploration.documentId,
+          kind: 'blockchain-explorer',
+          content: exploration.results ? JSON.stringify(exploration.results) : '',
+          isVisible: true,
+          status: 'idle',
+          boundingBox: {
+            top: 0,
+            left: 0,
+            width: 0,
+            height: 0
+          }
+        };
+        
+        // Add to local artifacts state if not already there
+        setArtifacts(prev => {
+          const exists = prev.some(a => a.documentId === exploration.documentId);
+          if (exists) {
+            return prev.map(a => a.documentId === exploration.documentId ? newArtifact : a);
+          } else {
+            return [...prev, newArtifact];
+          }
+        });
+        
+        // Also use the setArtifact from useArtifact
+        setArtifact(newArtifact);
+        
+        // Set artifact data and results
+        setArtifactData({
+          address: exploration.address,
+          chain: exploration.network,
+          category: 'chain-explorer',
+          documentId: exploration.documentId
+        });
+        
+        if (exploration.results) {
+          setBlockchainResults(exploration.results);
+          setShowArtifact(true);
+        }
+      }
+    }
+  }, [documentIdParam, explorations, setArtifact]);
   
   // Update artifacts when a new one is created
   useEffect(() => {
@@ -145,6 +214,27 @@ export default function DashboardPage() {
       const controller = new AbortController();
       const { signal } = controller;
       
+      // Create blockchain exploration in the database
+      if (user?.id) {
+        try {
+          await fetch('/api/blockchain/exploration', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              privyDID: user.id,
+              documentId,
+              query,
+              address,
+              network: chain
+            }),
+          });
+        } catch (error) {
+          console.error('Error creating blockchain exploration in database:', error);
+        }
+      }
+      
       // Start the blockchain data scraping process
       const response = await fetch('/api/artifacts/blockchain-explorer', {
         method: 'POST',
@@ -210,6 +300,28 @@ export default function DashboardPage() {
                       )
                     );
                     
+                    // Update the exploration results in the database
+                    if (user?.id) {
+                      try {
+                        const exploration = explorations.find(e => e.documentId === documentId);
+                        if (exploration) {
+                          await fetch('/api/blockchain/exploration', {
+                            method: 'PATCH',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              id: exploration.id,
+                              status: 'completed',
+                              results: data.content
+                            }),
+                          });
+                        }
+                      } catch (error) {
+                        console.error('Error updating blockchain exploration results:', error);
+                      }
+                    }
+                    
                     setShowArtifact(true);
                     setIsLoading(false);
                   } 
@@ -218,6 +330,27 @@ export default function DashboardPage() {
                     const { currentStepId, log } = data.content;
                     setCurrentStepId(currentStepId);
                     setProcessLogs(prev => [...prev, log]);
+                    
+                    // Update the exploration status in the database
+                    if (user?.id) {
+                      try {
+                        const exploration = explorations.find(e => e.documentId === documentId);
+                        if (exploration) {
+                          await fetch('/api/blockchain/exploration', {
+                            method: 'PATCH',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              id: exploration.id,
+                              status: 'in_progress'
+                            }),
+                          });
+                        }
+                      } catch (error) {
+                        console.error('Error updating blockchain exploration status:', error);
+                      }
+                    }
                   }
                 } catch (e) {
                   console.error('Error parsing event data:', e);
@@ -228,11 +361,35 @@ export default function DashboardPage() {
         } catch (error) {
           console.error('Error reading stream:', error);
           setIsLoading(false);
+          
+          // Update the exploration status to failed in the database
+          if (user?.id) {
+            try {
+              const exploration = explorations.find(e => e.documentId === documentId);
+              if (exploration) {
+                await fetch('/api/blockchain/exploration', {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    id: exploration.id,
+                    status: 'failed'
+                  }),
+                });
+              }
+            } catch (error) {
+              console.error('Error updating blockchain exploration status to failed:', error);
+            }
+          }
         }
       };
       
       // Start processing the stream
       processStream();
+      
+      // Update URL with the document ID
+      router.push(`/dashboard?documentId=${documentId}`);
       
       // Cleanup function
       return () => {
@@ -467,13 +624,13 @@ export default function DashboardPage() {
                               <div className="p-4 bg-gray-900 rounded-md">
                                 <h4 className="text-lg font-semibold mb-2">Explorer Information</h4>
                                 <p>
-                                  <span className="font-medium">Address:</span> {parsedContent.address || 'Unknown'}
+                                  <span className="font-medium">Address:</span> {parsedContent.address || artifactData?.address || 'Unknown'}
                                 </p>
                                 <p>
-                                  <span className="font-medium">Chain:</span> {parsedContent.chain || 'Unknown'}
+                                  <span className="font-medium">Chain:</span> {parsedContent.chain || artifactData?.chain || 'Unknown'}
                                 </p>
                                 <p>
-                                  <span className="font-medium">Category:</span> {parsedContent.category || 'Unknown'}
+                                  <span className="font-medium">Category:</span> {parsedContent.category || artifactData?.category || 'Unknown'}
                                 </p>
                               </div>
                               
@@ -482,6 +639,84 @@ export default function DashboardPage() {
                                 <div className="p-4 bg-gray-900 rounded-md">
                                   <h4 className="text-lg font-semibold mb-2">Summary</h4>
                                   <p className="whitespace-pre-wrap">{parsedContent.summary}</p>
+                                </div>
+                              )}
+                              
+                              {/* Display transactions if available */}
+                              {parsedContent.transactions && parsedContent.transactions.length > 0 && (
+                                <div>
+                                  <h4 className="text-lg font-semibold mb-2">
+                                    Transactions ({parsedContent.metadata?.scraped || 0} of {parsedContent.metadata?.total || 0})
+                                  </h4>
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-700">
+                                      <thead className="bg-gray-800">
+                                        <tr>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hash</th>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Timestamp</th>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From</th>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">To</th>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Value</th>
+                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-gray-900 divide-y divide-gray-800">
+                                        {parsedContent.transactions.map((tx: any, index: number) => (
+                                          <tr key={index} className="hover:bg-gray-800">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-400">
+                                              <a
+                                                href={`${parsedContent.explorer?.explorer_url}/tx/${tx.hash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hover:underline"
+                                              >
+                                                {tx.hash.substring(0, 10)}...
+                                              </a>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                              {tx.timestamp}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                              {tx.from ? (
+                                                <a
+                                                  href={`${parsedContent.explorer?.explorer_url}/address/${tx.from}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="hover:underline"
+                                                >
+                                                  {tx.from.substring(0, 6)}...
+                                                </a>
+                                              ) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                              {tx.to ? (
+                                                <a
+                                                  href={`${parsedContent.explorer?.explorer_url}/address/${tx.to}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="hover:underline"
+                                                >
+                                                  {tx.to.substring(0, 6)}...
+                                                </a>
+                                              ) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                              {tx.value || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                                tx.status === 'Success' ? 'bg-green-900/30 text-green-400' : 
+                                                tx.status === 'Failed' ? 'bg-red-900/30 text-red-400' : 
+                                                'bg-gray-800 text-gray-400'
+                                              }`}>
+                                                {tx.status || 'Unknown'}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
                                 </div>
                               )}
                             </>
