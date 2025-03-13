@@ -35,6 +35,22 @@ This document outlines the technical implementation of the MVP for the Blockchai
   - Streams execution results back to UI.
 
 ## **3. Strategy Crafting Component**
+## **UI Real-Time Updates & Graph Rendering**
+- When a user submits an address, the UI listens for broadcasted updates from the API.
+- **Graph Rendering:**
+  - New addresses are added as **pending nodes**.
+  - As tagging processes execute, the nodes may update to a **confirmed state** with a label.
+- **Address Tagging:**
+  - If linked wallets are identified, they may be labeled as `alt_wallet_candidate`.
+  - If associated with known services, they may be tagged as `dex`, `bridge`, `mixer`, etc.
+- **Dynamic Graph Updates:**
+  - The UI updates nodes dynamically based on real-time data streaming from the API.
+  - Users can see relationships evolve as investigations progress.
+- **Technology Stack**: LangChain.js, LangGraph.js, Chroma, Neo4j (for storing validated strategies), PostgreSQL (for structured data, tagging), Redis (caching execution metadata)
+- **Responsibilities**:
+  - Researches available data sources and APIs.
+  - May initiate **Agentic Account Creation** (e.g., Dune API signup).
+  - Crafts a new sleuthing strategy dynamically using available tools.
 
 ### **Example 1: Crafting a `Bridge Transfer` Strategy**
 #### **Step 1: Check Existing Strategy**
@@ -57,23 +73,6 @@ This document outlines the technical implementation of the MVP for the Blockchai
 #### **Step 4: Validate & Store Results**
 - Results are sent to the user for validation.
 - Upon confirmation, stores the bridge identification method for future reuse.
-
-## **UI Real-Time Updates & Graph Rendering**
-- When a user submits an address, the UI listens for broadcasted updates from the API.
-- **Graph Rendering:**
-  - New addresses are added as **pending nodes**.
-  - As tagging processes execute, the nodes may update to a **confirmed state** with a label.
-- **Address Tagging:**
-  - If linked wallets are identified, they may be labeled as `alt_wallet_candidate`.
-  - If associated with known services, they may be tagged as `dex`, `bridge`, `mixer`, etc.
-- **Dynamic Graph Updates:**
-  - The UI updates nodes dynamically based on real-time data streaming from the API.
-  - Users can see relationships evolve as investigations progress.
-- **Technology Stack**: LangChain.js, LangGraph.js, Chroma, Neo4j (for storing validated strategies), PostgreSQL (for structured data, tagging), Redis (caching execution metadata)
-- **Responsibilities**:
-  - Researches available data sources and APIs.
-  - May initiate **Agentic Account Creation** (e.g., Dune API signup).
-  - Crafts a new sleuthing strategy dynamically using available tools.
 
 ### **Example 2: Crafting an `EVM Transfer` Strategy**
 #### **Step 1: Check Existing Strategy**
