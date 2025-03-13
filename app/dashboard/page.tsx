@@ -13,6 +13,7 @@ import { parseBlockchainQuery, isBlockchainQuery } from '@/lib/blockchain-query-
 import { Skeleton } from '@/components/ui/skeleton';
 import BlockchainExplorerArtifactActions from '@/artifacts/blockchain-explorer/artifact-actions';
 import { blockchainExplorerArtifact } from '@/artifacts/blockchain-explorer/client';
+import { ProcessViewer, defaultBlockchainExplorationSteps } from '@/components/blockchain-explorer/process-viewer';
 
 // Define types for the artifact
 interface UIArtifact {
@@ -37,6 +38,8 @@ export default function DashboardPage() {
   const [showArtifact, setShowArtifact] = useState(false);
   const [artifactData, setArtifactData] = useState<any>(null);
   const [blockchainResults, setBlockchainResults] = useState<any>(null);
+  const [currentStepId, setCurrentStepId] = useState<string>('understanding');
+  const [processLogs, setProcessLogs] = useState<string[]>([]);
   const chatId = nanoid();
   const { setArtifact } = useArtifact();
   
@@ -75,6 +78,8 @@ export default function DashboardPage() {
     setIsLoading(true);
     setShowArtifact(false);
     setBlockchainResults(null);
+    setCurrentStepId('understanding');
+    setProcessLogs([]);
     
     try {
       // Create a new document ID for the artifact
@@ -92,6 +97,9 @@ export default function DashboardPage() {
           chain = params.chain;
           category = params.category;
           toast.success('Blockchain query detected and parsed successfully');
+          
+          // Add to process logs
+          setProcessLogs(prev => [...prev, `Blockchain query detected: ${address} on ${chain}`]);
         } else {
           toast.error('Could not parse blockchain address from query');
           setIsLoading(false);
@@ -204,6 +212,12 @@ export default function DashboardPage() {
                     
                     setShowArtifact(true);
                     setIsLoading(false);
+                  } 
+                  // Handle step updates
+                  else if (data.type === 'step-update') {
+                    const { currentStepId, log } = data.content;
+                    setCurrentStepId(currentStepId);
+                    setProcessLogs(prev => [...prev, log]);
                   }
                 } catch (e) {
                   console.error('Error parsing event data:', e);
@@ -252,7 +266,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="container mx-auto px-4 py-12">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-3xl font-bold mb-8 text-center">Blockchain Explorer Dashboard</h1>
           
           <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-8 mb-8">
@@ -302,43 +316,14 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          {/* Skeleton Loading Component */}
-          {isLoading && !showArtifact && (
-            <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-8 mb-8 space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <Skeleton className="h-8 w-64 bg-gray-700" />
-                <Skeleton className="h-8 w-32 bg-gray-700" />
-              </div>
-              
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full bg-gray-700" />
-                <Skeleton className="h-4 w-5/6 bg-gray-700" />
-                <Skeleton className="h-4 w-4/6 bg-gray-700" />
-              </div>
-              
-              <div className="pt-4">
-                <Skeleton className="h-10 w-full bg-gray-700" />
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full bg-gray-700" />
-                  <Skeleton className="h-4 w-5/6 bg-gray-700" />
-                  <Skeleton className="h-4 w-4/6 bg-gray-700" />
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full bg-gray-700" />
-                  <Skeleton className="h-4 w-5/6 bg-gray-700" />
-                  <Skeleton className="h-4 w-4/6 bg-gray-700" />
-                </div>
-              </div>
-              
-              <div className="pt-4">
-                <div className="flex items-center space-x-2">
-                  <Skeleton className="h-6 w-6 rounded-full bg-gray-700" />
-                  <Skeleton className="h-4 w-40 bg-gray-700" />
-                </div>
-              </div>
+          {/* Process Viewer Component */}
+          {isLoading && (
+            <div className="mb-8">
+              <ProcessViewer 
+                steps={defaultBlockchainExplorationSteps} 
+                currentStepId={currentStepId}
+                logs={processLogs}
+              />
             </div>
           )}
           
