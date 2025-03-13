@@ -258,9 +258,9 @@ export default function BlockchainExplorerArtifact({
                           <Badge
                             variant={
                               tx.status === 'Success'
-                                ? 'success'
+                                ? 'default'
                                 : tx.status === 'Pending'
-                                ? 'warning'
+                                ? 'secondary'
                                 : 'destructive'
                             }
                           >

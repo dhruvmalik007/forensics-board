@@ -279,6 +279,14 @@ const DocumentContent = ({ document }: { document: Document }) => {
           status={artifact.status}
           isInline={true}
         />
+      ) : document.kind === 'blockchain-explorer' ? (
+        <div className="flex flex-1 relative size-full p-4">
+          <div className="absolute inset-0 overflow-auto">
+            <pre className="text-xs text-gray-300 whitespace-pre-wrap">
+              {document.content ? JSON.parse(document.content).summary || document.content : ''}
+            </pre>
+          </div>
+        </div>
       ) : null}
     </div>
   );

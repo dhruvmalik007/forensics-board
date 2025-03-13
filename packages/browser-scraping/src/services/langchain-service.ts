@@ -1,6 +1,6 @@
-import { ChatOpenAI } from 'langchain/chat_models/openai';
+import { ChatOpenAI } from '@langchain/openai';
 import { ChainExplorer, Transaction } from '../types';
-import { StructuredOutputParser } from 'langchain/output_parsers';
+import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { z } from 'zod';
 
 export class LangChainService {
