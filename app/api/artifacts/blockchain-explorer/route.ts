@@ -20,7 +20,23 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
       
+      // Helper function to update step and send logs
+      const updateStep = (stepId: string, log: string) => {
+        writeToStream({
+          type: 'step-update',
+          content: {
+            currentStepId: stepId,
+            log
+          }
+        });
+      };
+      
       try {
+        // Step 1: Understanding Query
+        updateStep('understanding', `Starting blockchain exploration for address ${address} on ${chain}`);
+        updateStep('understanding', `Query detected: ${query}`);
+        updateStep('understanding', `Category: ${category}`);
+        
         // Send address update to client
         writeToStream({
           type: 'address-update',
@@ -39,8 +55,22 @@ export async function POST(req: NextRequest) {
           content: category,
         });
         
+        // Step 2: Searching Blockchain Explorer
+        updateStep('searching', `Connecting to blockchain explorers for ${chain}...`);
+        updateStep('searching', `Initializing blockchain explorer scraper`);
+        
         // Create a new scraper instance
         const scraper = new BlockchainExplorerScraper();
+        
+        // Step 3: Cross-Chain Analysis (if applicable)
+        if (category === 'crosschain-txn') {
+          updateStep('crosschain', `Performing cross-chain analysis for ${address}`);
+          updateStep('crosschain', `Searching for bridge transactions and cross-chain activity`);
+        }
+        
+        // Step 4: Fetching Transaction Data
+        updateStep('fetching', `Fetching transaction data for ${address}`);
+        updateStep('fetching', `Requesting up to 10 transactions from the blockchain`);
         
         // Scrape transactions
         const result = await scraper.scrapeTransactions({
@@ -50,8 +80,19 @@ export async function POST(req: NextRequest) {
           limit: 10,
         });
         
+        updateStep('fetching', `Successfully retrieved ${result.transactions?.length || 0} transactions`);
+        
+        // Step 5: Processing Results
+        updateStep('processing', `Processing transaction data`);
+        updateStep('processing', `Generating transaction summary`);
+        
         // Generate summary
         const summary = await scraper.generateSummary(result);
+        
+        updateStep('processing', `Summary generation complete`);
+        
+        // Step 6: Rendering Results
+        updateStep('rendering', `Preparing data for visualization`);
         
         // Send results to client
         writeToStream({
@@ -63,6 +104,8 @@ export async function POST(req: NextRequest) {
           type: 'summary-update',
           content: summary,
         });
+        
+        updateStep('rendering', `Blockchain exploration complete`);
         
         // Save the document
         await saveDocument({
@@ -86,6 +129,9 @@ export async function POST(req: NextRequest) {
           type: 'error-update',
           content: error instanceof Error ? error.message : 'An unknown error occurred',
         });
+        
+        // Send error step update
+        updateStep('error', `Error: ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
       } finally {
         controller.close();
       }

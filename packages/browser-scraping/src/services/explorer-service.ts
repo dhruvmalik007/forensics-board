@@ -33,6 +33,15 @@ export class ExplorerService {
   }
 
   /**
+   * Find an explorer by name
+   */
+  findExplorerByName(name: string): ChainExplorer | undefined {
+    return this.explorers.find(
+      (explorer) => explorer.project_name.toLowerCase() === name.toLowerCase()
+    );
+  }
+
+  /**
    * Get all explorers by category
    */
   getExplorersByCategory(category: ExplorerCategory): ChainExplorer[] {
