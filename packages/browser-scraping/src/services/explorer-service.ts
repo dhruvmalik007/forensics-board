@@ -11,7 +11,7 @@ export class ExplorerService {
   /**
    * Find an explorer by chain and category
    */
-  findExplorer(chain: string, category: ExplorerCategory = 'chain-explorer'): ChainExplorer | undefined {
+  findExplorer(chain: string, category: string): ChainExplorer | undefined {
     // First try to find an exact match for chain and category
     const exactMatch = this.explorers.find(
       (explorer) => 
@@ -24,18 +24,22 @@ export class ExplorerService {
     }
 
     // If no exact match, try to find any explorer in the category
-    if (category !== 'chain-explorer') {
-      return this.explorers.find((explorer) => explorer.category === category);
-    }
+    return this.explorers.find((explorer) => explorer.category === category);
+  }
 
-    // If still no match, return undefined
-    return undefined;
+  /**
+   * Find an explorer by name
+   */
+  findExplorerByName(name: string): ChainExplorer | undefined {
+    return this.explorers.find(
+      (explorer) => explorer.project_name.toLowerCase() === name.toLowerCase()
+    );
   }
 
   /**
    * Get all explorers by category
    */
-  getExplorersByCategory(category: ExplorerCategory): ChainExplorer[] {
+  getExplorersByCategory(category: string): ChainExplorer[] {
     return this.explorers.filter((explorer) => explorer.category === category);
   }
 
@@ -52,9 +56,16 @@ export class ExplorerService {
   /**
    * Get all available categories
    */
-  getAvailableCategories(): ExplorerCategory[] {
+  getAvailableCategories(): string[] {
     return this.explorers
       .map((explorer) => explorer.category)
-      .filter((category, index, self) => self.indexOf(category) === index) as ExplorerCategory[];
+      .filter((category, index, self) => self.indexOf(category) === index);
+  }
+
+  /**
+   * Get all explorers
+   */
+  getAllExplorers(): ChainExplorer[] {
+    return this.explorers;
   }
 } 

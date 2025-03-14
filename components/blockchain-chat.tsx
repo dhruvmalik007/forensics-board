@@ -64,6 +64,8 @@ export function BlockchainChat({ initialQuery = '' }: BlockchainChatProps) {
     id: chatId,
     body: {
       id: chatId,
+      createArtifact: true, // Enable artifact creation
+      artifactType: 'blockchain-explorer', // Specify the artifact type
     },
     onError: (error) => {
       console.error('Chat error:', error);

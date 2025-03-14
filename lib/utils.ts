@@ -38,10 +38,10 @@ export const fetcher = async (url: string) => {
 };
 
 export function getLocalStorage(key: string) {
-  if (typeof window !== 'undefined') {
-    return JSON.parse(localStorage.getItem(key) || '[]');
+  if (typeof window === 'undefined') {
+    return [];
   }
-  return [];
+  return JSON.parse(localStorage.getItem(key) || '[]');
 }
 
 export function generateUUID(): string {
@@ -229,3 +229,57 @@ export function getDocumentTimestampByIndex(
 
   return documents[index].createdAt;
 }
+
+/**
+ * Logger utility for consistent logging across the application
+ */
+export const logger = {
+  /**
+   * Log an informational message
+   * @param message Message to log
+   */
+  info: (message: string): void => {
+    console.log(`[INFO] ${message}`);
+  },
+
+  /**
+   * Log a warning message
+   * @param message Message to log
+   */
+  warn: (message: string): void => {
+    console.warn(`[WARN] ${message}`);
+  },
+
+  /**
+   * Log an error message
+   * @param message Message to log
+   */
+  error: (message: string): void => {
+    console.error(`[ERROR] ${message}`);
+  },
+
+  /**
+   * Log a debug message (only in development)
+   * @param message Message to log
+   */
+  debug: (message: string): void => {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[DEBUG] ${message}`);
+    }
+  },
+
+  /**
+   * Log a structured operation for agentic activities
+   * @param operation Operation name
+   * @param details Operation details
+   */
+  operation: (operation: string, details: Record<string, any>): void => {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      operation,
+      ...details
+    };
+    console.log(`[OPERATION] ${JSON.stringify(logEntry)}`);
+  }
+};

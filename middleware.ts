@@ -13,7 +13,9 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/callback') ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/api/auth');
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/chat') || // Allow chat routes without authentication
+    pathname.startsWith('/dashboard'); // Allow dashboard without authentication
     
   // Respond to CORS preflight requests
   if (request.method === 'OPTIONS') {
@@ -24,13 +26,6 @@ export async function middleware(request: NextRequest) {
   // For Privy, we'll check for a specific cookie
   const hasPrivyToken = request.cookies.has('privy-token');
   const hasNextAuthToken = request.cookies.has('next-auth.session-token') || request.cookies.has('__Secure-next-auth.session-token');
-  
-  // For the /chat route and its children, ensure we have authentication
-  if (pathname.startsWith('/chat') && !hasPrivyToken && !hasNextAuthToken) {
-    const url = new URL('/login', request.url);
-    url.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(url);
-  }
   
   // If it's a public route, allow access
   if (isPublicRoute) {
