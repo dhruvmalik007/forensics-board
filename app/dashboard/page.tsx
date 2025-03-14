@@ -16,7 +16,7 @@ import {
   NodeType,
   generateRelevantAddressDetails
 } from '../../lib/mock-data';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
 
 // Import the Node and Edge types from the graph visualization component
@@ -735,29 +735,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white overflow-hidden flex flex-col">
-      {/* Branding Banner */}
-      <div className="bg-gray-800 border-b border-gray-700 py-2 px-4 flex items-center justify-between">
-        <div className="flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-          </svg>
-          <h1 className="text-xl font-bold">Blockchain Forensics</h1>
-        </div>
-        <a 
-          href="/"
-          className="flex items-center text-gray-300 hover:text-white transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Return Home
-        </a>
-      </div>
-
-      <div className="flex-1 flex flex-col md:flex-row">
+    <div className="h-[calc(100vh-48px)] w-full bg-gray-900 text-white overflow-hidden">
+      <div className="h-full flex flex-col md:flex-row overflow-hidden">
         {/* Left Panel - Strategy Control */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-b md:border-b-0 md:border-r border-gray-800 p-2 md:p-4 flex flex-col md:max-h-[calc(100vh-48px)]">
+        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-b md:border-b-0 md:border-r border-gray-800 p-2 md:p-4 flex flex-col h-auto md:h-full">
           <div className="flex-grow overflow-y-auto">
             <StrategyControlPanel 
               strategies={strategies}
@@ -835,7 +816,7 @@ export default function DashboardPage() {
         </div>
         
         {/* Center Panel - Graph Visualization with Floating Chat */}
-        <div className="flex-1 md:flex-grow relative h-[40vh] md:h-[calc(100vh-48px)]">
+        <div className="flex-1 md:flex-grow relative h-[40vh] md:h-full">
           <div className="h-full">
             <GraphVisualization 
               key={graphData.nodes.length > 0 ? graphData.nodes[0].id : 'empty-graph'}
@@ -870,7 +851,7 @@ export default function DashboardPage() {
         </div>
         
         {/* Right Panel - Details and Address List */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col md:max-h-[calc(100vh-48px)]">
+        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col h-[50vh] md:h-full overflow-hidden">
           {/* Top Section - Details View */}
           <div className="h-1/2 p-2 md:p-4 border-b border-gray-800 overflow-y-auto">
             <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Address Details</h2>
