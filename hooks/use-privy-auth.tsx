@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePrivy, useLogin, useWallets, useConnectWallet } from '@privy-io/react-auth';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -10,6 +10,12 @@ export function usePrivyAuth() {
   const router = useRouter();
   const { wallets } = useWallets();
   const { connectWallet } = useConnectWallet();
+  const [isBrowser, setIsBrowser] = useState(false);
+  
+  // Check if we're in the browser
+  useEffect(() => {
+    setIsBrowser(true);
+  }, []);
   
   // Use the useLogin hook to handle login success
   const { login } = useLogin({
@@ -33,6 +39,8 @@ export function usePrivyAuth() {
   
   // Check if the user is already authenticated and redirect accordingly
   useEffect(() => {
+    if (!isBrowser) return; // Skip during server-side rendering
+    
     if (ready && authenticated) {
       // Check if the user has already been verified with Self Protocol
       const isSelfVerified = localStorage.getItem('selfVerified') === 'true';
@@ -45,10 +53,12 @@ export function usePrivyAuth() {
         router.push('/verify');
       }
     }
-  }, [ready, authenticated, router]);
+  }, [ready, authenticated, router, isBrowser]);
   
   // Function to handle wallet connection
   const handleConnectWallet = async () => {
+    if (!isBrowser) return false; // Don't attempt to connect during SSR
+    
     try {
       await connectWallet();
       toast.success('Wallet connected successfully');
