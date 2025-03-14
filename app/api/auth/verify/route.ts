@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateUserVerification } from '@/lib/auth/privy-auth-handler';
 import { getUserByPrivyDID } from '@/lib/db/queries';
+import { updateUserVerification } from '@/lib/auth/privy-auth-handler';
 
 /**
- * API route to handle Self Protocol verification
- * This endpoint is called when a user completes the Self Protocol verification process
+ * API route to update user verification status
+ * This endpoint is called when a user completes the verification process
  */
 export async function POST(request: NextRequest) {
   try {
-    const { walletAddress, privyDID } = await request.json();
+    const { privyDID, verified } = await request.json();
 
-    if (!walletAddress || !privyDID) {
+    if (!privyDID) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: walletAddress or privyDID' },
+        { success: false, error: 'Missing required field: privyDID' },
         { status: 400 }
       );
     }
 
-    // Get the user by Privy DID
+    // Get the user from the database
     const user = await getUserByPrivyDID(privyDID);
     
     if (!user) {
@@ -27,24 +27,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In a real implementation, this would call the Self Protocol API to verify the user
-    // For demo purposes, we'll simulate a successful verification
-    
-    // Update the user's verification status in the database
+    // Update the user's verification status
     await updateUserVerification({
       userId: user.id,
-      isVerified: true
+      isVerified: verified === true
     });
-
-    return NextResponse.json({ 
+    
+    return NextResponse.json({
       success: true,
-      message: 'User verified successfully'
+      message: 'User verification status updated successfully'
     });
   } catch (error) {
-    console.error('Error verifying user:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to verify user' },
-      { status: 500 }
-    );
+    console.error('Error updating user verification status:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 } 
