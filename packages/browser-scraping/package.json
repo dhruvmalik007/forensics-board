@@ -8,14 +8,21 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "ts-node src/tests/lifi-scan-test.ts",
+    "test:sdk": "ts-node src/tests/sdk-test.ts",
+    "test:explorers": "ts-node src/tests/explorer-logs-test.ts",
     "dev": "ts-node-dev --respawn src/index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-elasticache": "^3.761.0",
+    "@aws-sdk/client-neptune-graph": "^3.764.0",
     "@browserbasehq/sdk": "^1.0.0",
     "@langchain/core": "^0.1.0",
     "@langchain/openai": "^0.0.1",
+    "@selfxyz/core": "^0.0.7",
+    "@types/uuid": "^10.0.0",
     "dotenv": "^16.3.1",
     "langchain": "^0.0.200",
+    "uuid": "^11.1.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -24,4 +31,4 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.2"
   }
-} 
+}

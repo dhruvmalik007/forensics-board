@@ -6,7 +6,7 @@ import { Browserbase } from '@browserbasehq/sdk';
 export class BrowserbaseService {
   private apiKey: string;
   private projectId: string;
-  private browserbase: any; // Using any for now to avoid type errors
+  private browserbase: Browserbase; // Using any to avoid type errors with the SDK
 
   constructor(apiKey?: string, projectId?: string) {
     this.apiKey = apiKey || process.env.BROWSERBASE_API_KEY || '';
@@ -20,8 +20,8 @@ export class BrowserbaseService {
       console.warn('No Browserbase Project ID provided. Browser automation will not work.');
     }
     
-    // Initialize the Browserbase SDK
-    this.browserbase = new Browserbase({ apiKey: this.apiKey });
+    // Initialize the Browserbase SDK with the API key
+    this.browserbase = new Browserbase({ apiKey: this.apiKey, projectId: this.projectId });
   }
 
   /**
@@ -45,16 +45,19 @@ export class BrowserbaseService {
     this.logOperation('SESSION_CREATE_START', {});
     
     try {
+      if (!this.apiKey || !this.projectId) {
+        throw new Error('Browserbase API key and Project ID are required for session creation');
+      }
+
       // Create a session using the SDK
-      const session = await this.browserbase.sessions.create({
+      const session = await this.browserbase.createSession({
         projectId: this.projectId,
-        browser: 'chrome',
         timeout: 60000, // 1 minute timeout
       });
       
-      // Connect to the page using the SDK
-      const page = await this.browserbase.pages.connect({
-        sessionId: session.id,
+      // Connect to the page
+      const page = await this.browserbase.getSession({
+        sessionId: session.id,  
       });
       
       this.logOperation('SESSION_CREATE_SUCCESS', { sessionId: session.id });

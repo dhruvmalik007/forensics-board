@@ -163,12 +163,9 @@ export async function runLifiScanTest() {
   
   console.log(`Found LI.FI explorer: ${lifiExplorer.project_name} (${lifiExplorer.explorer_url})`);
   
-  // Create scraping input
+  // Create scraping input - only address is required now
   const input: ScrapingInput = {
-    address: testAddress,
-    chain: 'ethereum', // LI.FI is cross-chain, but we'll use ethereum as the base chain
-    category: lifiExplorer.category,
-    limit: 10
+    address: testAddress
   };
   
   try {
@@ -273,4 +270,4 @@ if (require.main === module) {
       console.error('Test failed:', error);
       process.exit(1);
     });
-} 
+}

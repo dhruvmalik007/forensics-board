@@ -149,6 +149,33 @@ The package consists of several services:
 - **LangChainService**: Uses LLMs for generating instructions, parsing data, and creating summaries
 - **ExplorerService**: Manages the list of blockchain explorers
 
+## Recent Changes
+
+### BrowserbaseService Updates
+
+The `BrowserbaseService` has been updated to properly initialize and use the Browserbase SDK:
+
+1. Added validation for both API key and Project ID
+2. Improved error handling for session creation
+3. Added a dedicated SDK test to verify functionality
+
+### SDK Test
+
+A new test file `sdk-test.ts` has been added to verify that the Browserbase SDK is working correctly. This test:
+
+1. Initializes the SDK with your API key
+2. Creates a session with your Project ID
+3. Connects to a page
+4. Navigates to a website
+5. Extracts content
+6. Closes the session
+
+Run this test to verify that your Browserbase credentials are working correctly:
+
+```bash
+npm run test:sdk
+```
+
 ## Avoiding Hallucination
 
 The package implements several techniques to avoid hallucination:

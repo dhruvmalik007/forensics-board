@@ -153,9 +153,6 @@ async function runExplorerTest(explorer: ChainExplorer, address: string): Promis
   // Create scraping input
   const input: ScrapingInput = {
     address,
-    chain: explorer.chain || 'ethereum', // Default to ethereum if no chain specified
-    category: explorer.category,
-    limit: 5
   };
   
   try {

@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 // Explorer types
 export const ExplorerCategorySchema = z.enum([
-  'crosschain-txn',
-  'intent-bridge',
-  'intel-txn',
-  'chain-explorer'
+  'EOAAddress',
+  'ContractAddress',
+  'TokenAddress',
+  
 ]);
 
 export type ExplorerCategory = z.infer<typeof ExplorerCategorySchema>;
@@ -36,9 +36,7 @@ export type Transaction = z.infer<typeof TransactionSchema>;
 // Input types
 export const ScrapingInputSchema = z.object({
   address: z.string(),
-  chain: z.string(),
-  category: ExplorerCategorySchema.optional().default('chain-explorer'),
-  limit: z.number().optional().default(10)
+  category: z.string().optional(),
 });
 
 export type ScrapingInput = z.infer<typeof ScrapingInputSchema>;

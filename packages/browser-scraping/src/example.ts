@@ -1,4 +1,5 @@
 import { BlockchainExplorerScraper } from './index';
+import { ScrapingInput } from './types';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -6,7 +7,7 @@ dotenv.config();
 
 async function main() {
   // Create a new scraper instance
-  const scraper = new BlockchainExplorerScraper(process.env.OPENAI_API_KEY);
+  const scraper = new BlockchainExplorerScraper();
 
   try {
     // Example Ethereum address (Vitalik's address)
@@ -14,13 +15,13 @@ async function main() {
     
     console.log(`Scraping transactions for address: ${address}`);
     
+    // Create input object with just the address
+    const input: ScrapingInput = {
+      address
+    };
+    
     // Scrape transactions
-    const result = await scraper.scrapeTransactions({
-      address,
-      chain: 'ethereum',
-      category: 'chain-explorer',
-      limit: 5
-    });
+    const result = await scraper.scrapeTransactions(input);
 
     console.log(`Found ${result.transactions.length} transactions on ${result.explorer.project_name}`);
     console.log('Transactions:');
@@ -28,7 +29,8 @@ async function main() {
 
     // Generate a summary
     console.log('\nGenerating summary...');
-    const summary = await scraper.generateSummary(result);
+    // Pass the input object instead of the result
+    const summary = await scraper.generateSummary(input);
     console.log('\nSummary:');
     console.log(summary);
 

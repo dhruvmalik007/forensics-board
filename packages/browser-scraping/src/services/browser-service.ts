@@ -1,4 +1,4 @@
-import { ChainExplorer, ScrapingInput, ScrapingResult, Transaction } from '../types';
+import { ChainExplorer, ScrapingInput, ScrapingResult, Transaction, ExplorerCategory } from '../types';
 import { ExplorerService } from './explorer-service';
 import { LangChainService } from './langchain-service';
 import { BrowserbaseService } from './browserbase-service';
@@ -34,18 +34,39 @@ export class BrowserService {
    * Scrape transactions from a blockchain explorer
    */
   async scrapeTransactions(input: ScrapingInput): Promise<ScrapingResult> {
-    const { address, chain, category, limit } = input;
+    const { address } = input;
+    // Default to EOAAddress category if not provided
+    const category = input.category ? input.category as unknown as ExplorerCategory : 'EOAAddress';
     
-    this.logOperation('SCRAPE_START', { address, chain, category, limit });
+    this.logOperation('SCRAPE_START', { address, category });
     
-    // Find the explorer for the given chain and category
-    const explorer = this.explorerService.findExplorer(chain, category);
-    if (!explorer) {
-      const error = `No explorer found for chain ${chain} and category ${category}`;
-      this.logOperation('SCRAPE_ERROR', { error, chain, category });
+    // Find all explorers for the given category
+    const explorers = this.explorerService.getAllExplorers().filter(
+      explorer => explorer.category === category
+    );
+    
+    if (explorers.length === 0) {
+      const error = `No explorer found for address ${address} with category ${category}`;
+      this.logOperation('SCRAPE_ERROR', { error, address, category });
       throw new Error(error);
     }
     
+    // Use the first available explorer
+    const explorer = explorers[0];
+    
+    this.logOperation('USING_EXPLORER', { 
+      explorer: explorer.project_name,
+      address,
+      category
+    });
+    
+    return this.scrapeWithExplorer(explorer, address, 10);
+  }
+  
+  /**
+   * Scrape transactions using a specific explorer
+   */
+  private async scrapeWithExplorer(explorer: ChainExplorer, address: string, limit: number): Promise<ScrapingResult> {
     try {
       // Generate browser instructions for the explorer
       this.logOperation('GENERATE_INSTRUCTIONS_START', { explorer: explorer.project_name, address });
@@ -114,7 +135,7 @@ export class BrowserService {
   async generateSummary(input: ScrapingInput): Promise<string> {
     const { address } = input;
     
-    this.logOperation('SUMMARY_START', { address, chain: input.chain, category: input.category });
+    this.logOperation('SUMMARY_START', { address });
     
     try {
       // Scrape transactions first
