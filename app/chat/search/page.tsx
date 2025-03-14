@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { BlockchainChat } from '@/components/blockchain-chat';
 import { parseBlockchainQuery, isBlockchainQuery } from '@/lib/blockchain-query-parser';
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const queryParam = searchParams.get('query');
   const [initialQuery, setInitialQuery] = useState<string | null>(null);
@@ -33,6 +33,25 @@ export default function SearchPage() {
   }, [queryParam]);
 
   return (
+    <>
+      {queryParam && (
+        <div className="p-4 bg-blue-900/30 rounded-lg border border-blue-800">
+          <h2 className="text-lg font-medium mb-2">Current Query:</h2>
+          <div className="p-3 bg-gray-900 rounded-md font-mono text-green-400">
+            {queryParam}
+          </div>
+        </div>
+      )}
+      
+      <div className="flex-1 bg-gray-800/50 rounded-xl border border-gray-700 p-6 overflow-hidden">
+        <BlockchainChat initialQuery={initialQuery || ''} />
+      </div>
+    </>
+  );
+}
+
+export default function SearchPage() {
+  return (
     <div className="flex-1 overflow-auto bg-gradient-to-b from-gray-900 to-black text-white">
       <div className="container h-full max-w-4xl py-6 md:py-8 lg:py-10">
         <div className="flex flex-col gap-8 h-full">
@@ -48,18 +67,13 @@ export default function SearchPage() {
             </Link>
           </div>
           
-          {queryParam && (
-            <div className="p-4 bg-blue-900/30 rounded-lg border border-blue-800">
-              <h2 className="text-lg font-medium mb-2">Current Query:</h2>
-              <div className="p-3 bg-gray-900 rounded-md font-mono text-green-400">
-                {queryParam}
-              </div>
+          <Suspense fallback={
+            <div className="flex-1 bg-gray-800/50 rounded-xl border border-gray-700 p-6 overflow-hidden flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
             </div>
-          )}
-          
-          <div className="flex-1 bg-gray-800/50 rounded-xl border border-gray-700 p-6 overflow-hidden">
-            <BlockchainChat />
-          </div>
+          }>
+            <SearchContent />
+          </Suspense>
         </div>
       </div>
     </div>

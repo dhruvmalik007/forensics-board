@@ -10,12 +10,9 @@ export default async function Page({
 }: {
   searchParams: { query?: string };
 }) {
-  // Check authentication
+  // Authentication is optional now
   const session = await auth();
-  if (!session) {
-    redirect('/login');
-  }
-
+  
   // Get the chat model from cookies
   const cookieStore = await cookies();
   const chatModelCookie = cookieStore.get('chat-model');

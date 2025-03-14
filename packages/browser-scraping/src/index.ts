@@ -1,10 +1,22 @@
+// Export services
+export { BrowserService } from './services/browser-service';
+export { BrowserbaseService } from './services/browserbase-service';
+export { ExplorerService } from './services/explorer-service';
+export { LangChainService } from './services/langchain-service';
+
 // Export types
 export * from './types';
 
-// Export services
-export { ExplorerService } from './services/explorer-service';
-export { LangChainService } from './services/langchain-service';
-export { BrowserService } from './services/browser-service';
+// Export tests
+export { runLifiScanTest } from './tests/lifi-scan-test';
+
+/**
+ * Browser Scraping Package
+ * 
+ * This package provides a service for scraping blockchain explorer websites using Browserbase
+ * for browser automation. It includes functionality for extracting transaction data from
+ * various blockchain explorers and generating summaries of transaction activity.
+ */
 
 // Main class for browser scraping
 import { BrowserService } from './services/browser-service';
@@ -18,10 +30,9 @@ export class BlockchainExplorerScraper {
 
   /**
    * Create a new BlockchainExplorerScraper
-   * @param openAIApiKey - OpenAI API key (optional, will use environment variable if not provided)
    */
-  constructor(openAIApiKey?: string) {
-    this.browserService = new BrowserService(openAIApiKey);
+  constructor() {
+    this.browserService = new BrowserService();
   }
 
   /**
@@ -35,11 +46,11 @@ export class BlockchainExplorerScraper {
 
   /**
    * Generate a summary of transaction data
-   * @param result - Scraping result
+   * @param input - Scraping input parameters
    * @returns Summary of transaction data
    */
-  async generateSummary(result: ScrapingResult): Promise<string> {
-    return this.browserService.generateSummary(result.transactions, result.transactions[0]?.from || '');
+  async generateSummary(input: ScrapingInput): Promise<string> {
+    return this.browserService.generateSummary(input);
   }
 }
 
