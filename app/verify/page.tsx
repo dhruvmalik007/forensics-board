@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { SelfVerification } from '@/components/self-verification';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
 import { Button } from '@/components/ui/button';
 
@@ -14,31 +14,37 @@ export default function VerifyPage() {
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnectingWallet, setIsConnectingWallet] = useState(false);
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+  const [isBrowser, setIsBrowser] = useState(false);
+
+  // Check if we're in the browser
+  useEffect(() => {
+    setIsBrowser(true);
+  }, []);
 
   useEffect(() => {
+    // Only set loading to false when Privy is ready
     if (ready) {
       setLoading(false);
       
       if (!authenticated) {
         router.push('/');
-      } else if (user?.wallet?.address) {
+        return;
+      }
+      
+      // Check if user has a wallet and set the address
+      if (user?.wallet?.address) {
         setWalletAddress(user.wallet.address);
       }
-    }
-  }, [ready, authenticated, user, router]);
-
-  const handleVerificationComplete = (success: boolean) => {
-    if (success) {
-      // In a real implementation, you would store the verification status
-      // in a database or localStorage
-      localStorage.setItem('selfVerified', 'true');
       
-      // Redirect to dashboard after successful verification
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1000);
+      // Check if user is already verified from localStorage
+      if (isBrowser) {
+        const selfVerified = localStorage.getItem('selfVerified') === 'true';
+        setIsVerified(selfVerified);
+      }
     }
-  };
+  }, [ready, authenticated, user, router, isBrowser]);
 
   const handleSkipVerification = () => {
     toast.info('Proceeding without verification. Some features will be limited.');
@@ -83,12 +89,22 @@ export default function VerifyPage() {
             </svg>
             <h1 className="text-2xl font-bold">Blockchain Forensics</h1>
           </div>
-          <button
-            onClick={() => logout()}
-            className="bg-transparent border border-gray-600 hover:border-gray-400 text-white px-5 py-2 rounded-lg font-medium transition-colors"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center space-x-4">
+            <Button
+              onClick={() => router.push('/dashboard')}
+              variant="outline"
+              className="border-gray-600 hover:border-gray-400 text-white"
+            >
+              Dashboard
+            </Button>
+            <Button
+              onClick={() => logout()}
+              variant="outline"
+              className="border-gray-600 hover:border-gray-400 text-white"
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -139,21 +155,69 @@ export default function VerifyPage() {
             
             <div className="bg-gray-800/50 p-6 rounded-lg">
               <h2 className="text-xl font-semibold mb-4">Identity Verification</h2>
-              <p className="text-gray-400 mb-6">
-                Verify your identity using Self Protocol to unlock all features of the platform.
-                This process is secure and your data remains private.
-              </p>
               
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <SelfVerification onVerificationComplete={handleVerificationComplete} />
-                
-                <button
-                  onClick={handleSkipVerification}
-                  className="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Skip Verification
-                </button>
-              </div>
+              {isVerified ? (
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="flex items-center gap-2 text-green-500">
+                    <CheckCircle2 size={24} />
+                    <p className="font-medium text-lg">Verification Complete</p>
+                  </div>
+                  <p className="text-gray-400 text-center">
+                    Your identity has been successfully verified. You now have full access to all features.
+                  </p>
+                  <Button 
+                    onClick={() => router.push('/dashboard')}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Go to Dashboard
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-400 mb-6">
+                    Verify your identity using Self Protocol to unlock all features of the platform.
+                    This process is secure and your data remains private.
+                  </p>
+                  
+                  <div className="flex flex-col space-y-4">
+                    <div className="bg-gray-700/50 p-4 rounded-lg">
+                      <h3 className="font-medium mb-2">How it works:</h3>
+                      <ol className="list-decimal list-inside text-sm text-gray-300 space-y-2">
+                        <li>Click "Start Verification" to generate a QR code</li>
+                        <li>Scan the QR code with the Self Protocol app on your phone</li>
+                        <li>Complete the verification process in the app</li>
+                        <li>Your identity will be verified automatically</li>
+                      </ol>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <SelfVerification 
+                        open={isVerificationOpen}
+                        onOpenChange={setIsVerificationOpen}
+                      />
+                      
+                      <button
+                        onClick={() => setIsVerificationOpen(true)}
+                        disabled={!walletAddress}
+                        className={`${
+                          !walletAddress 
+                            ? 'bg-gray-600 cursor-not-allowed' 
+                            : 'bg-blue-600 hover:bg-blue-500'
+                        } text-white px-5 py-2 rounded-lg font-medium transition-colors`}
+                      >
+                        Start Verification
+                      </button>
+                      
+                      <button
+                        onClick={handleSkipVerification}
+                        className="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg font-medium transition-colors"
+                      >
+                        Skip Verification
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           

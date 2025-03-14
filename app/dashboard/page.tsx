@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, CheckCircle2, AlertCircle, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { SuggestedActions } from '@/components/suggested-actions';
 import { nanoid } from 'nanoid';
@@ -16,6 +16,8 @@ import { blockchainExplorerArtifact } from '@/artifacts/blockchain-explorer/clie
 import { ProcessViewer, defaultBlockchainExplorationSteps } from '@/components/blockchain-explorer/process-viewer';
 import { usePrivyAuthWithDB } from '@/hooks/use-privy-auth-with-db';
 import { useBlockchainExploration } from '@/hooks/use-blockchain-exploration';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Define types for the artifact
 interface UIArtifact {
@@ -37,7 +39,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const documentIdParam = searchParams.get('documentId');
-  const { user } = usePrivyAuthWithDB();
+  const { user, logout } = usePrivyAuthWithDB();
   
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -46,8 +48,15 @@ export default function DashboardPage() {
   const [blockchainResults, setBlockchainResults] = useState<any>(null);
   const [currentStepId, setCurrentStepId] = useState<string>('understanding');
   const [processLogs, setProcessLogs] = useState<string[]>([]);
+  const [isVerified, setIsVerified] = useState(false);
+  const [isBrowser, setIsBrowser] = useState(false);
   const chatId = nanoid();
   const { setArtifact } = useArtifact();
+  
+  // Check if we're in the browser
+  useEffect(() => {
+    setIsBrowser(true);
+  }, []);
   
   // Create a state for artifacts since it's not provided by useArtifact
   const [artifacts, setArtifacts] = useState<UIArtifact[]>([]);
@@ -59,6 +68,15 @@ export default function DashboardPage() {
   const { explorations, currentExploration, getExplorations } = useBlockchainExploration({
     privyDID: user?.id || '',
   });
+  
+  // Check verification status
+  useEffect(() => {
+    if (!isBrowser) return;
+    
+    // Check if user is verified from localStorage
+    const selfVerified = localStorage.getItem('selfVerified') === 'true';
+    setIsVerified(selfVerified || user?.isVerified || false);
+  }, [user, isBrowser]);
   
   // Load explorations when the component mounts or user changes
   useEffect(() => {
@@ -141,6 +159,12 @@ export default function DashboardPage() {
   const handleStartSearch = async () => {
     if (!query.trim()) {
       toast.error('Please enter a search query');
+      return;
+    }
+    
+    // Check if user is verified for premium features
+    if (!isVerified && query.includes('premium')) {
+      toast.error('This feature requires identity verification. Please verify your identity first.');
       return;
     }
     
@@ -249,160 +273,130 @@ export default function DashboardPage() {
           category,
           query
         }),
-        signal
+        signal,
       });
       
       if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+        throw new Error('Failed to fetch blockchain data');
       }
       
       // Process the streaming response
       const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
       if (!reader) {
-        throw new Error('Failed to get response reader');
+        throw new Error('Failed to read response stream');
       }
       
-      // Read the stream
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // Update the current step
+      setCurrentStepId('fetching');
       
+      // Process the stream
       const processStream = async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-              break;
-            }
-            
-            // Decode the chunk and add to buffer
-            buffer += decoder.decode(value, { stream: true });
-            
-            // Process complete events in the buffer
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(5));
-                  
-                  // Handle different event types
-                  if (data.type === 'result-update') {
-                    setBlockchainResults(data.content);
-                    
-                    // Update the artifact content
-                    setArtifacts(prev => 
-                      prev.map(a => 
-                        a.documentId === documentId 
-                          ? { ...a, content: JSON.stringify(data.content) } 
-                          : a
-                      )
-                    );
-                    
-                    // Update the exploration results in the database
-                    if (user?.id) {
-                      try {
-                        const exploration = explorations.find(e => e.documentId === documentId);
-                        if (exploration) {
-                          await fetch('/api/blockchain/exploration', {
-                            method: 'PATCH',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              id: exploration.id,
-                              status: 'completed',
-                              results: data.content
-                            }),
-                          });
-                        }
-                      } catch (error) {
-                        console.error('Error updating blockchain exploration results:', error);
-                      }
-                    }
-                    
-                    setShowArtifact(true);
-                    setIsLoading(false);
-                  } 
-                  // Handle step updates
-                  else if (data.type === 'step-update') {
-                    const { currentStepId, log } = data.content;
-                    setCurrentStepId(currentStepId);
-                    setProcessLogs(prev => [...prev, log]);
-                    
-                    // Update the exploration status in the database
-                    if (user?.id) {
-                      try {
-                        const exploration = explorations.find(e => e.documentId === documentId);
-                        if (exploration) {
-                          await fetch('/api/blockchain/exploration', {
-                            method: 'PATCH',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              id: exploration.id,
-                              status: 'in_progress'
-                            }),
-                          });
-                        }
-                      } catch (error) {
-                        console.error('Error updating blockchain exploration status:', error);
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.error('Error parsing event data:', e);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error reading stream:', error);
-          setIsLoading(false);
+        let buffer = '';
+        
+        while (true) {
+          const { done, value } = await reader.read();
           
-          // Update the exploration status to failed in the database
-          if (user?.id) {
-            try {
-              const exploration = explorations.find(e => e.documentId === documentId);
-              if (exploration) {
-                await fetch('/api/blockchain/exploration', {
-                  method: 'PATCH',
+          if (done) {
+            break;
+          }
+          
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Try to parse complete JSON objects from the buffer
+          try {
+            const result = JSON.parse(buffer);
+            
+            // Update the blockchain results
+            setBlockchainResults(result);
+            
+            // Update the artifact content
+            const updatedArtifact = {
+              ...newArtifact,
+              content: JSON.stringify(result),
+              status: 'idle' as const,
+            };
+            
+            // Update artifacts state
+            setArtifacts(prev => 
+              prev.map(a => a.documentId === documentId ? updatedArtifact : a)
+            );
+            
+            // Also update the artifact using setArtifact
+            setArtifact(updatedArtifact);
+            
+            // Show the artifact
+            setShowArtifact(true);
+            
+            // Update the current step
+            setCurrentStepId('completed');
+            
+            // Add to process logs
+            setProcessLogs(prev => [...prev, `Blockchain data fetched successfully for ${address}`]);
+            
+            // Update the blockchain exploration status in the database
+            if (user?.id) {
+              try {
+                await fetch(`/api/blockchain/exploration/${documentId}`, {
+                  method: 'PUT',
                   headers: {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
-                    id: exploration.id,
-                    status: 'failed'
+                    status: 'completed',
+                    results: result
                   }),
                 });
+              } catch (error) {
+                console.error('Error updating blockchain exploration status in database:', error);
               }
-            } catch (error) {
-              console.error('Error updating blockchain exploration status to failed:', error);
             }
+            
+            // Clear the buffer
+            buffer = '';
+          } catch (e) {
+            // Incomplete JSON, continue reading
+            // Add to process logs
+            setProcessLogs(prev => [...prev, `Processing data...`]);
           }
         }
       };
       
       // Start processing the stream
-      processStream();
-      
-      // Update URL with the document ID
-      router.push(`/dashboard?documentId=${documentId}`);
-      
-      // Cleanup function
-      return () => {
-        controller.abort();
-      };
-      
+      await processStream();
     } catch (error) {
-      console.error('Error starting blockchain search:', error);
-      toast.error('Failed to start blockchain search');
+      console.error('Error fetching blockchain data:', error);
+      toast.error('Failed to fetch blockchain data');
+      
+      // Update the current step
+      setCurrentStepId('error');
+      
+      // Add to process logs
+      setProcessLogs(prev => [...prev, `Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
+      
+      // Update the blockchain exploration status in the database
+      if (user?.id && artifactData?.documentId) {
+        try {
+          await fetch(`/api/blockchain/exploration/${artifactData.documentId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              status: 'failed',
+              results: null
+            }),
+          });
+        } catch (error) {
+          console.error('Error updating blockchain exploration status in database:', error);
+        }
+      }
+    } finally {
       setIsLoading(false);
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
       {/* Header */}
@@ -414,332 +408,223 @@ export default function DashboardPage() {
             </svg>
             <h1 className="text-2xl font-bold">Blockchain Forensics</h1>
           </div>
-          <Link href="/">
-            <button className="bg-transparent border border-gray-600 hover:border-gray-400 text-white px-5 py-2 rounded-lg font-medium transition-colors">
-              Back to Home
-            </button>
-          </Link>
+          <div className="flex items-center space-x-4">
+            {isVerified ? (
+              <div className="flex items-center text-green-500">
+                <CheckCircle2 size={16} className="mr-1" />
+                <span className="text-sm">Verified</span>
+              </div>
+            ) : (
+              <Button
+                onClick={() => router.push('/verify')}
+                variant="outline"
+                className="border-yellow-600 hover:border-yellow-500 text-yellow-500"
+              >
+                <ShieldAlert size={16} className="mr-1" />
+                Verify Identity
+              </Button>
+            )}
+            <Button
+              onClick={() => logout()}
+              variant="outline"
+              className="border-gray-600 hover:border-gray-400 text-white"
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8 text-center">Blockchain Explorer Dashboard</h1>
-          
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-8 mb-8">
-            <h2 className="text-xl font-semibold mb-6 text-center">Search Blockchain Transactions</h2>
-            
-            <div className="mb-6">
-              <SuggestedActions 
-                chatId={chatId} 
-                append={async (message) => {
-                  setQuery(message.content);
-                  return null;
-                }} 
+      <main className="container mx-auto px-4 py-8">
+        {/* Verification Status Banner */}
+        {!isVerified && (
+          <div className="mb-8 bg-yellow-900/30 border border-yellow-800 rounded-lg p-4 flex items-start">
+            <AlertCircle className="text-yellow-500 mr-3 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="font-medium text-yellow-500">Identity Verification Required</h3>
+              <p className="text-sm text-gray-300 mt-1">
+                Some premium features require identity verification. Please verify your identity to access all features.
+              </p>
+              <Button 
+                onClick={() => router.push('/verify')} 
+                variant="outline" 
+                className="mt-3 border-yellow-600 hover:border-yellow-500 text-yellow-500"
+              >
+                Verify Now
+              </Button>
+            </div>
+          </div>
+        )}
+        
+        {/* Search Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold mb-4">Blockchain Explorer</h2>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Enter blockchain address (0x...) or query"
+                className="w-full pl-10 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleStartSearch()}
               />
             </div>
-            
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="query" className="block text-sm font-medium mb-2">
-                  Enter your blockchain query
-                </label>
-                <textarea
-                  id="query"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Example: Show me the transactions for 0x35FEcd342124CA5d1B4E8E480eC5b55DA5759f7b on ethereum including cross-chain transactions via layerzero"
-                  className="w-full p-4 bg-gray-900 border border-gray-700 rounded-md text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
-                />
-              </div>
-              
+            <Button
+              onClick={handleStartSearch}
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              {isLoading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+          
+          {/* Example queries */}
+          <div className="mt-3">
+            <p className="text-sm text-gray-400 mb-2">Example queries:</p>
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={handleStartSearch}
-                disabled={isLoading}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                onClick={() => setQuery('0x388C818CA8B9251b393131C08a736A67ccB19297')}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded-full transition-colors"
               >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    <span>Searching...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search size={18} />
-                    <span>Search Blockchain</span>
-                  </>
-                )}
+                Ethereum Address
+              </button>
+              <button
+                onClick={() => setQuery('ethereum:0x388C818CA8B9251b393131C08a736A67ccB19297')}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded-full transition-colors"
+              >
+                Ethereum with Chain
+              </button>
+              <button
+                onClick={() => setQuery('premium:0x388C818CA8B9251b393131C08a736A67ccB19297')}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded-full transition-colors"
+              >
+                Premium Feature (Requires Verification)
               </button>
             </div>
           </div>
-          
-          {/* Process Viewer Component */}
-          {isLoading && (
-            <div className="mb-8">
-              <ProcessViewer 
-                steps={defaultBlockchainExplorationSteps} 
-                currentStepId={currentStepId}
-                logs={processLogs}
+        </div>
+        
+        {/* Process Viewer */}
+        {isLoading && (
+          <div className="mb-8">
+            <ProcessViewer
+              steps={defaultBlockchainExplorationSteps}
+              currentStepId={currentStepId}
+              logs={processLogs}
+            />
+          </div>
+        )}
+        
+        {/* Results Section */}
+        {showArtifact && blockchainResults && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-4">Results</h2>
+            <div className="bg-gray-800/30 border border-gray-700 rounded-lg p-6">
+              <BlockchainExplorerArtifactActions
+                inputs={{
+                  address: artifactData?.address || '',
+                  chain: artifactData?.chain || 'ethereum'
+                }}
+                updateInputs={(inputs) => {
+                  setArtifactData({
+                    ...artifactData,
+                    ...inputs
+                  });
+                }}
               />
-            </div>
-          )}
-          
-          {/* Blockchain Explorer Artifact */}
-          {(showArtifact || blockchainArtifact) && (
-            <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-8 mb-8">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold">Blockchain Explorer Results</h3>
-                {artifactData && (
-                  <BlockchainExplorerArtifactActions 
-                    inputs={{
-                      address: artifactData.address,
-                      chain: artifactData.chain
-                    }}
-                    updateInputs={(inputs: any) => {
-                      setArtifactData({
-                        ...artifactData,
-                        ...inputs
-                      });
-                    }}
-                  />
+              
+              {/* Display blockchain results here */}
+              <div className="mt-6">
+                {blockchainResults.transactions && blockchainResults.transactions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                      <thead className="bg-gray-800">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hash</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Timestamp</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">To</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-gray-900 divide-y divide-gray-800">
+                        {blockchainResults.transactions.slice(0, 10).map((tx: any, index: number) => (
+                          <tr key={index} className="hover:bg-gray-800">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-400">
+                              {tx.hash ? tx.hash.substring(0, 10) + '...' : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                              {tx.timestamp || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                              {tx.from ? tx.from.substring(0, 6) + '...' : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                              {tx.to ? tx.to.substring(0, 6) + '...' : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                              {tx.value || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400 py-8">
+                    No transactions found for this address.
+                  </div>
                 )}
               </div>
-              
-              <div className="artifact-container">
-                <div className="blockchain-explorer-content">
-                  {blockchainResults ? (
-                    <div className="space-y-6">
-                      {/* Explorer Information */}
-                      <div className="p-4 bg-gray-900 rounded-md">
-                        <h4 className="text-lg font-semibold mb-2">Explorer Information</h4>
-                        <p>
-                          <span className="font-medium">Name:</span> {blockchainResults.explorer?.project_name || 'Unknown'}
-                        </p>
-                        <p>
-                          <span className="font-medium">URL:</span>{' '}
-                          <a
-                            href={blockchainResults.explorer?.explorer_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:underline"
-                          >
-                            {blockchainResults.explorer?.explorer_url || 'N/A'}
-                          </a>
-                        </p>
-                        <p>
-                          <span className="font-medium">Chain:</span> {blockchainResults.explorer?.chain || artifactData?.chain || 'Unknown'}
-                        </p>
-                        <p>
-                          <span className="font-medium">Category:</span> {blockchainResults.explorer?.category || artifactData?.category || 'Unknown'}
-                        </p>
-                      </div>
-                      
-                      {/* Transactions Table */}
-                      {blockchainResults.transactions && blockchainResults.transactions.length > 0 && (
-                        <div>
-                          <h4 className="text-lg font-semibold mb-2">
-                            Transactions ({blockchainResults.metadata?.scraped || 0} of {blockchainResults.metadata?.total || 0})
-                          </h4>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-700">
-                              <thead className="bg-gray-800">
-                                <tr>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hash</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Timestamp</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">To</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Value</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-gray-900 divide-y divide-gray-800">
-                                {blockchainResults.transactions.map((tx: any, index: number) => (
-                                  <tr key={index} className="hover:bg-gray-800">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-400">
-                                      <a
-                                        href={`${blockchainResults.explorer?.explorer_url}/tx/${tx.hash}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="hover:underline"
-                                      >
-                                        {tx.hash.substring(0, 10)}...
-                                      </a>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                      {tx.timestamp}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                      {tx.from ? (
-                                        <a
-                                          href={`${blockchainResults.explorer?.explorer_url}/address/${tx.from}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="hover:underline"
-                                        >
-                                          {tx.from.substring(0, 6)}...
-                                        </a>
-                                      ) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                      {tx.to ? (
-                                        <a
-                                          href={`${blockchainResults.explorer?.explorer_url}/address/${tx.to}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="hover:underline"
-                                        >
-                                          {tx.to.substring(0, 6)}...
-                                        </a>
-                                      ) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                      {tx.value || '-'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                      <span className={`px-2 py-1 rounded-full text-xs ${
-                                        tx.status === 'Success' ? 'bg-green-900/30 text-green-400' : 
-                                        tx.status === 'Failed' ? 'bg-red-900/30 text-red-400' : 
-                                        'bg-gray-800 text-gray-400'
-                                      }`}>
-                                        {tx.status || 'Unknown'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : blockchainArtifact && blockchainArtifact.content ? (
-                    <div className="space-y-6">
-                      {/* Try to parse and display the content */}
-                      {(() => {
-                        try {
-                          const parsedContent = JSON.parse(blockchainArtifact.content);
-                          return (
-                            <>
-                              {/* Explorer Information */}
-                              <div className="p-4 bg-gray-900 rounded-md">
-                                <h4 className="text-lg font-semibold mb-2">Explorer Information</h4>
-                                <p>
-                                  <span className="font-medium">Address:</span> {parsedContent.address || artifactData?.address || 'Unknown'}
-                                </p>
-                                <p>
-                                  <span className="font-medium">Chain:</span> {parsedContent.chain || artifactData?.chain || 'Unknown'}
-                                </p>
-                                <p>
-                                  <span className="font-medium">Category:</span> {parsedContent.category || artifactData?.category || 'Unknown'}
-                                </p>
-                              </div>
-                              
-                              {/* Display summary if available */}
-                              {parsedContent.summary && (
-                                <div className="p-4 bg-gray-900 rounded-md">
-                                  <h4 className="text-lg font-semibold mb-2">Summary</h4>
-                                  <p className="whitespace-pre-wrap">{parsedContent.summary}</p>
-                                </div>
-                              )}
-                              
-                              {/* Display transactions if available */}
-                              {parsedContent.transactions && parsedContent.transactions.length > 0 && (
-                                <div>
-                                  <h4 className="text-lg font-semibold mb-2">
-                                    Transactions ({parsedContent.metadata?.scraped || 0} of {parsedContent.metadata?.total || 0})
-                                  </h4>
-                                  <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-700">
-                                      <thead className="bg-gray-800">
-                                        <tr>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hash</th>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Timestamp</th>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From</th>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">To</th>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Value</th>
-                                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="bg-gray-900 divide-y divide-gray-800">
-                                        {parsedContent.transactions.map((tx: any, index: number) => (
-                                          <tr key={index} className="hover:bg-gray-800">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-400">
-                                              <a
-                                                href={`${parsedContent.explorer?.explorer_url}/tx/${tx.hash}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="hover:underline"
-                                              >
-                                                {tx.hash.substring(0, 10)}...
-                                              </a>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                              {tx.timestamp}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                              {tx.from ? (
-                                                <a
-                                                  href={`${parsedContent.explorer?.explorer_url}/address/${tx.from}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="hover:underline"
-                                                >
-                                                  {tx.from.substring(0, 6)}...
-                                                </a>
-                                              ) : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                              {tx.to ? (
-                                                <a
-                                                  href={`${parsedContent.explorer?.explorer_url}/address/${tx.to}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="hover:underline"
-                                                >
-                                                  {tx.to.substring(0, 6)}...
-                                                </a>
-                                              ) : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                              {tx.value || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                              <span className={`px-2 py-1 rounded-full text-xs ${
-                                                tx.status === 'Success' ? 'bg-green-900/30 text-green-400' : 
-                                                tx.status === 'Failed' ? 'bg-red-900/30 text-red-400' : 
-                                                'bg-gray-800 text-gray-400'
-                                              }`}>
-                                                {tx.status || 'Unknown'}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          );
-                        } catch (e) {
-                          return (
-                            <pre className="text-sm overflow-auto p-4 bg-gray-900 rounded">
-                              {blockchainArtifact.content}
-                            </pre>
-                          );
-                        }
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="p-4 text-center text-gray-400">
-                      No blockchain data available yet. Start a search to see results.
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+        
+        {/* Recent Explorations */}
+        {explorations.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold mb-4">Recent Explorations</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {explorations.map((exploration) => (
+                <Card key={exploration.id} className="bg-gray-800/30 border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">
+                      {exploration.address ? exploration.address.substring(0, 8) + '...' : 'Query'}
+                    </CardTitle>
+                    <CardDescription>
+                      {exploration.network || 'Ethereum'} • {new Date(exploration.createdAt).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-300 truncate">{exploration.query}</p>
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        exploration.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        exploration.status === 'failed' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {exploration.status}
+                      </span>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      variant="outline" 
+                      className="w-full border-gray-600 hover:border-gray-500"
+                      onClick={() => router.push(`/dashboard?documentId=${exploration.documentId}`)}
+                    >
+                      View Results
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
