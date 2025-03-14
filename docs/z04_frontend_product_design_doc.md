@@ -52,7 +52,7 @@ Appears when a node is selected:
 - **Relationship Summary**: How this address connects to the initial investigation subject
 - **Action Buttons**: Options to focus graph on this node, expand investigation, add notes, etc.
 
-### 4. Real-Time Updates Feed (Bottom Panel)
+### 4. Real-Time Updates Feed
 
 Provides streaming updates during active investigations:
 
@@ -80,7 +80,7 @@ Provides global application controls:
 3. User selects multiple strategies or enters a custom goal
 4. User clicks "Begin Investigation" 
 5. Central area initializes with the starting address node
-6. Strategy execution begins with real-time updates in the bottom panel
+6. Strategy execution begins with real-time updates
 
 ### Strategy Queue Management
 
@@ -101,10 +101,9 @@ Provides global application controls:
 ### Real-Time Feedback Loop
 
 1. As strategies execute, the graph expands with new nodes
-2. Bottom panel shows progress and discoveries in real-time
-3. When user validation is needed, a notification appears
-4. User can provide feedback directly from the notification
-5. Investigation continues based on user input
+2. When user validation is needed, a notification appears
+3. User can provide feedback directly from the notification
+4. Investigation continues based on user input
 
 ## Visual Design Direction
 

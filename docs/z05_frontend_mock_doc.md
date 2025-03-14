@@ -2,14 +2,11 @@
 
 ## 1. User Interface
 
-The interface is divided into three main sections:
+The interface is divided into four main sections:
 
-### 1.1 Investigation Control Panel (Left Section)
-Located on the left side of the interface, this panel is where you start and control investigations:
-- Input wallet addresses for investigation
-- Select from predefined investigation strategies (for eg: bi-directional transfers, funding address, bridge transactions etc...)
-- Or Express the investigtion goal in natural language
-- Manage the queue of strategies to be executed
+### 1.1 Strategy Control Panel (Left Section)
+Located on the left side of the interface, this panel is where you control ongoing investigations:
+- View and manage the queue of executing strategies
 - Start, pause, re-order or cancel investigations
 - Watch strategies execute sequentially with progress indicators
 
@@ -21,7 +18,14 @@ The central area displays the relationship graph between addresses as it evolves
 - Node colors and icons indicate address types and tags
 - Interactive controls allow zooming, panning, and focusing
 
-### 1.3 Details & List View (Right Section)
+### 1.3 Investigation Input (Floating Bottom Section)
+A floating interface overlaying the bottom of the graph area:
+- By default shows an input field for wallet addresses and strategy selection
+- Expands into a chat-like interface when clicked, showing interaction history
+- Allows selection of predefined strategies or natural language input for custom goals
+- Collapses to a button after strategy selection, can be expanded again as needed
+
+### 1.4 Details & List View (Right Section)
 The right section is split into two parts:
 
 #### Address Details (Upper Part)
@@ -38,7 +42,7 @@ A scrollable list of all addresses discovered during investigation:
 - Quick filters and sorting options
 - Selection highlighting synced with graph visualization
 
-### 1.4 Navigation Controls
+### 1.5 Navigation Controls
 The top navigation bar offers:
 - View toggle between graph and list views
 - Filter controls for the displayed data
