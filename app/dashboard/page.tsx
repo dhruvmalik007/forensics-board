@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { StrategyControlPanel, Strategy } from '../../components/dashboard/strategy-control-panel';
-import { GraphVisualization } from '../../components/dashboard/graph-visualization';
-import { ChatBox } from '../../components/dashboard/chat-box';
-import { DetailsView } from '../../components/dashboard/details-view';
-import { AddressList } from '../../components/dashboard/address-list';
+import { StrategyControlPanel, Strategy } from '@/components/dashboard/strategy-control-panel';
+import { GraphVisualization } from '@/components/dashboard/graph-visualization';
+import { ChatBox } from '@/components/dashboard/chat-box';
+import { DetailsView } from '@/components/dashboard/details-view';
+import { AddressList } from '@/components/dashboard/address-list';
 import { 
   predefinedStrategies, 
   generateMockGraphData, 
@@ -15,7 +15,7 @@ import {
   generateAddressList,
   NodeType,
   generateRelevantAddressDetails
-} from '../../lib/mock-data';
+} from '@/lib/mock-data';
 import { useRouter } from 'next/navigation';
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
 
@@ -74,10 +74,10 @@ export default function DashboardPage() {
   type InvestigationState = 'idle' | 'ready' | 'active' | 'paused' | 'completed';
   const [investigationState, setInvestigationState] = useState<InvestigationState>('idle');
   
-  // State for chat visibility
+  // State for chat visibility - start visible
   const [isChatVisible, setIsChatVisible] = useState(true);
   
-  // State for chat messages
+  // State for chat messages - initially empty
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   
   // State to trigger chat reset (using a number that increments)
@@ -86,41 +86,25 @@ export default function DashboardPage() {
   // Initialize with test data if in freemium mode
   useEffect(() => {
     const isFreemium = localStorage.getItem('freemiumEnabled') === 'true';
-    const testAddress = localStorage.getItem('testAddress');
     
     if (isFreemium) {
       // Set chat visible to guide users
       setIsChatVisible(true);
       
-      if (testAddress) {
-        // If there's a test address, load its data
-        const initialData = generateMockGraphData(testAddress);
-        setGraphData(initialData);
-        setSelectedAddress(testAddress);
-        
-        // Generate mock address details
-        const details = generateMockAddressDetails(testAddress, 'main');
-        setAddressDetails(details);
-        
-        // Generate address list with type casting to ensure correct type
-        const addressList = generateAddressList(initialData.nodes).map(item => ({
-          ...item,
-          type: item.type as NodeType
-        }));
-        setAddresses(addressList);
-        
-        // Set investigation state to ready
-        setInvestigationState('ready');
-        
-        // Add some initial strategies
-        const initialStrategies = generateMockStrategies(['token_transfers', 'nft_transfers']);
-        setStrategies(initialStrategies);
-      } else {
-        // If no test address, show empty state with chat prompt
-        setGraphData({ nodes: [], edges: [] });
-        setChatMessages(['Welcome to Freemium mode! Please enter an Ethereum address to start your investigation.']);
-        setInvestigationState('idle');
-      }
+      // Start with an empty state - let user enter an address
+      setGraphData({ nodes: [], edges: [] });
+      setChatMessages([
+        'Welcome to Freemium mode!', 
+        'Please enter an Ethereum address (starting with 0x) to start your investigation.',
+        'Example: 0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+      ]);
+      setInvestigationState('idle');
+      
+      // Clear any existing data
+      setSelectedAddress(undefined);
+      setAddressDetails(undefined);
+      setAddresses([]);
+      setStrategies([]);
     }
   }, []);
   
@@ -735,7 +719,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white overflow-hidden flex flex-col">
+    <div className="w-full min-h-screen bg-gray-900 text-white overflow-hidden flex flex-col">
       {/* Branding Banner */}
       <div className="bg-gray-800 border-b border-gray-700 py-2 px-4 flex items-center justify-between">
         <div className="flex items-center">
@@ -755,9 +739,9 @@ export default function DashboardPage() {
         </a>
       </div>
 
-      <div className="flex-1 flex flex-col md:flex-row">
+      <div className="flex-1 flex flex-col md:flex-row w-full">
         {/* Left Panel - Strategy Control */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-b md:border-b-0 md:border-r border-gray-800 p-2 md:p-4 flex flex-col md:max-h-[calc(100vh-48px)]">
+        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-b md:border-b-0 md:border-r border-gray-800 p-2 md:p-4 flex flex-col md:h-[calc(100vh-48px)] shrink-0">
           <div className="flex-grow overflow-y-auto">
             <StrategyControlPanel 
               strategies={strategies}
@@ -835,8 +819,8 @@ export default function DashboardPage() {
         </div>
         
         {/* Center Panel - Graph Visualization with Floating Chat */}
-        <div className="flex-1 md:flex-grow relative h-[40vh] md:h-[calc(100vh-48px)]">
-          <div className="h-full">
+        <div className="flex-1 w-full relative h-[40vh] md:h-[calc(100vh-48px)]">
+          <div className="h-full w-full">
             <GraphVisualization 
               key={graphData.nodes.length > 0 ? graphData.nodes[0].id : 'empty-graph'}
               nodes={graphData.nodes}
@@ -870,7 +854,7 @@ export default function DashboardPage() {
         </div>
         
         {/* Right Panel - Details and Address List */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col md:max-h-[calc(100vh-48px)]">
+        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col md:h-[calc(100vh-48px)] shrink-0">
           {/* Top Section - Details View */}
           <div className="h-1/2 p-2 md:p-4 border-b border-gray-800 overflow-y-auto">
             <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Address Details</h2>

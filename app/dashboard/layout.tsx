@@ -49,8 +49,8 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen bg-gradient-to-b from-gray-900 to-black">
-        <Sidebar className="border-r border-gray-800">
+      <div className="flex min-h-screen h-screen w-full bg-gradient-to-b from-gray-900 to-black">
+        <Sidebar className="border-r border-gray-800 h-full shrink-0">
           <SidebarHeader className="border-b border-gray-800 px-4 py-3">
             <div className="flex items-center space-x-2">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -60,7 +60,7 @@ export default function DashboardLayout({
             </div>
           </SidebarHeader>
           
-          <SidebarContent className="px-2 py-4">
+          <SidebarContent className="px-2 py-4 overflow-y-auto">
             <TransactionSessionsSidebar />
           </SidebarContent>
           
@@ -81,7 +81,7 @@ export default function DashboardLayout({
           </SidebarFooter>
         </Sidebar>
         
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 w-full overflow-auto h-full flex flex-col">
           <div className="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 flex items-center p-4">
             <Toggle>
               <PanelLeft className="h-5 w-5" />
@@ -92,7 +92,7 @@ export default function DashboardLayout({
             </div>
           </div>
           
-          <main className="p-4">
+          <main className="p-4 flex-1 overflow-auto w-full">
             {children}
           </main>
         </div>
