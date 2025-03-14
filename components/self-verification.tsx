@@ -7,13 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
 import { SelfAppBuilder } from '@selfxyz/qrcode';
-import dynamic from 'next/dynamic';
-
-// Dynamically import the QR code component with no SSR
-const SelfQRcodeWrapper = dynamic(
-  () => import('@selfxyz/qrcode'),
-  { ssr: false }
-);
+import SelfQRcodeWrapper from '@selfxyz/qrcode';
 
 // Define the scope for the Self Protocol verification
 const SELF_SCOPE = 'blockchain-forensics';
@@ -79,9 +73,29 @@ export function SelfVerification({ open, onOpenChange }: { open: boolean; onOpen
         setSelfApp(app);
       } catch (error) {
         console.error("Error creating SelfApp:", error);
+        handleVerificationFailure(error);
       }
     }
   }, [user?.wallet?.address, isBrowser]);
+
+  // Add error event listener to the SelfApp
+  useEffect(() => {
+    if (selfApp && isBrowser) {
+      // Add event listener for errors
+      const handleError = (error: any) => {
+        console.error("SelfApp error:", error);
+        handleVerificationFailure(error);
+      };
+      
+      // Attach error event listener
+      window.addEventListener('self:error', handleError);
+      
+      // Clean up
+      return () => {
+        window.removeEventListener('self:error', handleError);
+      };
+    }
+  }, [selfApp, isBrowser]);
 
   const handleConnectWallet = async () => {
     setIsConnectingWallet(true);
@@ -113,8 +127,6 @@ export function SelfVerification({ open, onOpenChange }: { open: boolean; onOpen
 
   // Handle successful verification
   const handleVerificationSuccess = async () => {
-    setVerificationStatus('pending');
-    
     try {
       // Call our API to update the user's verification status in the database
       const response = await fetch('/api/auth/verify', {
@@ -136,18 +148,15 @@ export function SelfVerification({ open, onOpenChange }: { open: boolean; onOpen
       // Store verification status in localStorage for UI purposes
       localStorage.setItem('selfVerified', 'true');
       
-      // Show success state
+      // Show success state briefly
       setVerificationStatus('success');
       toast.success('Identity verified successfully!');
       
-      // Close the dialog after a delay
-      setTimeout(() => {
-        onOpenChange(false);
-        setVerificationStatus('idle');
-        
-        // Refresh the page to update UI based on verification status
-        window.location.reload();
-      }, 2000);
+      // Close the dialog immediately
+      onOpenChange(false);
+      
+      // Immediate redirect to dashboard using window.location for consistent navigation
+      window.location.href = '/dashboard';
     } catch (error) {
       console.error('Error updating verification status:', error);
       setVerificationStatus('error');
@@ -240,7 +249,6 @@ export function SelfVerification({ open, onOpenChange }: { open: boolean; onOpen
                 <SelfQRcodeWrapper
                   selfApp={selfApp}
                   onSuccess={handleVerificationSuccess}
-                  onError={handleVerificationFailure}
                   size={250}
                 />
               ) : (
