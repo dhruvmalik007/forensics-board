@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PricingBanner } from '@/components/ui/pricing-banner';
@@ -14,37 +14,66 @@ export default function Page() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  
+  // Simplified authentication check with relative paths
+  useEffect(() => {
+    if (!ready) return;
+    
+    // Check if user is already verified
+    const isVerified = localStorage.getItem('selfVerified') === 'true';
+    if (authenticated && isVerified) {
+      window.location.href = '/dashboard';
+    }
+  }, [authenticated, ready]);
 
   const handleLoginWithSelf = async () => {
+    if (isLoggingIn || isNavigating) return;
+    
     setIsLoggingIn(true);
     try {
       await login();
       // After successful login, check if user is already verified
       const isVerified = localStorage.getItem('selfVerified') === 'true';
       if (isVerified) {
-        // If verified, redirect to dashboard using window.location for consistency
+        setIsNavigating(true);
         window.location.href = '/dashboard';
+      } else {
+        setIsNavigating(true);
+        window.location.href = '/verify';
       }
-      // If not verified, router will handle redirect to verify page
     } catch (error) {
       console.error('Login error:', error);
       toast.error('Login failed. Please try again.');
-    } finally {
-      // Reset login state after a short delay
-      setTimeout(() => {
-        setIsLoggingIn(false);
-      }, 1000);
+      setIsLoggingIn(false);
+      setIsNavigating(false);
     }
   };
 
   const handleFreemiumAccess = () => {
-    // Set freemium flag in localStorage
-    localStorage.setItem('freemiumEnabled', 'true');
-    // Clear any existing test address to ensure fresh start
-    localStorage.removeItem('testAddress');
-    // Use window.location.href for a hard navigation to ensure it persists
-    window.location.href = '/dashboard';
+    if (isNavigating) return;
+    setIsNavigating(true);
+    
+    // Show loading toast
+    toast.loading('Preparing freemium access...', {
+      duration: 2000,
+    });
+    
+    // Navigate to the dedicated freemium page
+    window.location.href = '/freemium';
   };
+
+  // Show loading state for authentication or navigation
+  if (!ready || isNavigating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span>{isNavigating ? 'Redirecting to dashboard...' : 'Loading...'}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
@@ -116,9 +145,10 @@ export default function Page() {
                 <span>Login and Verify using Self Protocol</span>
               )}
             </button>
+            {/* Replace Link with button for consistency */}
             <button 
               onClick={handleFreemiumAccess}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
+              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors inline-flex items-center justify-center"
             >
               Testing with Freemium Features
             </button>
@@ -197,38 +227,6 @@ export default function Page() {
               <h3 className="text-xl font-semibold mb-2">AI-Powered Chat</h3>
               <p className="text-gray-400">Conversational interface for natural language blockchain analysis queries.</p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section - Replace with a new CTA section */}
-      <section className="py-20 bg-gradient-to-r from-blue-900/30 to-purple-900/30">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-6">Start Your Blockchain Investigation</h2>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-10">
-            Unlock powerful blockchain forensics tools and gain insights into on-chain activities with our advanced analytics platform.
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button
-              onClick={handleLoginWithSelf}
-              disabled={isLoggingIn}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors flex items-center justify-center gap-2"
-            >
-              {isLoggingIn ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Signing In...</span>
-                </>
-              ) : (
-                <span>Login with Self Protocol</span>
-              )}
-            </button>
-            <button
-              onClick={handleFreemiumAccess}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
-            >
-              Try Freemium Features
-            </button>
           </div>
         </div>
       </section>

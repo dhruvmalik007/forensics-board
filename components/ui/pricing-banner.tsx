@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,8 @@ import { usePrivyAuth } from '@/hooks/use-privy-auth';
 import { useState } from 'react';
 import { SelfVerification } from '@/components/self-verification';
 import { toast } from 'sonner';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface PricingTierProps {
   title: string;
@@ -128,21 +130,61 @@ export function PricingBanner({ onFreemiumClick }: {
 }) {
   const { authenticated, user, login } = usePrivyAuth();
   const [isVerificationOpen, setIsVerificationOpen] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const router = useRouter();
   
-  // For demo purposes, we'll check if the user has a wallet connected as a proxy for verification
-  // In a real implementation, we would check a verified flag in the user's metadata
-  const isVerified = authenticated && user?.wallet?.address ? true : false;
+  // Check if user is verified
+  const isVerified = localStorage.getItem('selfVerified') === 'true';
   
   const handleVerifyClick = async () => {
+    if (isLoggingIn || isNavigating) return;
+    
     if (!authenticated) {
+      setIsLoggingIn(true);
       toast.info("Please sign in first to verify your identity");
-      await login();
+      try {
+        await login();
+        // Prevent multiple navigations
+        setIsNavigating(true);
+        // Use relative path for navigation
+        window.location.href = '/verify';
+      } catch (error) {
+        console.error('Login error:', error);
+        toast.error('Login failed. Please try again.');
+        setIsLoggingIn(false);
+        setIsNavigating(false);
+      }
       return;
     }
     
-    setIsVerificationOpen(true);
+    if (!isVerified) {
+      setIsVerificationOpen(true);
+    } else {
+      // Prevent multiple navigations
+      setIsNavigating(true);
+      // Use relative path for navigation
+      window.location.href = '/dashboard';
+    }
+  };
+
+  // Don't create our own navigation, just use the parent's handler
+  const handleFreemiumClick = () => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+    window.location.href = '/freemium';
   };
   
+  // Show loading state during navigation
+  if (isNavigating) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <span>Redirecting to dashboard...</span>
+      </div>
+    );
+  }
+
   const freemiumFeatures = [
     { text: "Basic blockchain address analysis", included: true },
     { text: "Limited transaction history (10 transactions)", included: true },
@@ -180,7 +222,7 @@ export function PricingBanner({ onFreemiumClick }: {
           price="Free"
           features={freemiumFeatures}
           buttonText="Testing with Freemium Features"
-          onButtonClick={onFreemiumClick}
+          onButtonClick={handleFreemiumClick}
         />
         <PricingTier
           title="Verified Account"
@@ -188,7 +230,7 @@ export function PricingBanner({ onFreemiumClick }: {
           price="Free"
           features={verifiedFeatures}
           buttonText={isVerified ? "Access Premium Features" : "Login and Verify using Self Protocol"}
-          onButtonClick={isVerified ? onFreemiumClick : handleVerifyClick}
+          onButtonClick={isVerified ? handleFreemiumClick : handleVerifyClick}
           highlighted={true}
           badge={isVerified ? "Verified" : "Recommended"}
         />
@@ -198,6 +240,15 @@ export function PricingBanner({ onFreemiumClick }: {
         open={isVerificationOpen} 
         onOpenChange={setIsVerificationOpen} 
       />
+
+      <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
+        <button
+          onClick={handleFreemiumClick}
+          className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors inline-flex items-center justify-center"
+        >
+          Try Freemium Features
+        </button>
+      </div>
     </div>
   );
 } 

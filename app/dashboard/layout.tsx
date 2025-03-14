@@ -25,15 +25,21 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = usePrivyAuthWithDB();
   const pathname = usePathname();
+  const [isFreemium, setIsFreemium] = useState(false);
   
-  // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !user) {
+    // Check if in freemium mode
+    const freemiumEnabled = localStorage.getItem('freemiumEnabled') === 'true';
+    setIsFreemium(freemiumEnabled);
+    
+    // Only redirect if not authenticated AND not in freemium mode
+    if (!isLoading && !user && !freemiumEnabled) {
       window.location.href = '/';
     }
   }, [user, isLoading]);
 
-  if (isLoading) {
+  // Show loading only if authenticating AND not in freemium mode
+  if (isLoading && !isFreemium) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -66,6 +72,11 @@ export default function DashboardLayout({
               >
                 Back to Home
               </Link>
+              {isFreemium && (
+                <div className="px-3 py-2 text-xs text-amber-400 bg-amber-500/10 rounded-md">
+                  Running in Freemium Mode
+                </div>
+              )}
             </div>
           </SidebarFooter>
         </Sidebar>
