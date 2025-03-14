@@ -2,21 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { PanelLeft } from 'lucide-react';
-import { TransactionSessionsSidebar } from '@/components/blockchain-explorer/transaction-sessions-sidebar';
 import { usePrivyAuthWithDB } from '@/hooks/use-privy-auth-with-db';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarProvider,
-  useSidebar,
-} from '@/components/ui/sidebar';
-
-import { Toggle } from '@/components/ui/toggle';
-
 
 export default function DashboardLayout({
   children,
@@ -24,7 +10,6 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { user, isLoading } = usePrivyAuthWithDB();
-  const pathname = usePathname();
   const [isFreemium, setIsFreemium] = useState(false);
   
   useEffect(() => {
@@ -41,62 +26,44 @@ export default function DashboardLayout({
   // Show loading only if authenticating AND not in freemium mode
   if (isLoading && !isFreemium) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-black">
+      <div className="flex items-center justify-center h-screen w-screen bg-gradient-to-b from-gray-900 to-black">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen h-screen w-full bg-gradient-to-b from-gray-900 to-black">
-        <Sidebar className="border-r border-gray-800 h-full shrink-0">
-          <SidebarHeader className="border-b border-gray-800 px-4 py-3">
-            <div className="flex items-center space-x-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-              </svg>
-              <span className="text-lg font-semibold text-white">Forensics</span>
+    <div className="h-screen w-screen bg-gradient-to-b from-gray-900 to-black overflow-hidden flex flex-col">
+      {/* Top Bar */}
+      <div className="bg-gray-800 border-b border-gray-700 py-2 px-4 flex items-center justify-between">
+        <div className="flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+          </svg>
+          <h1 className="text-xl font-bold">Blockchain Forensics</h1>
+        </div>
+        <div className="flex items-center space-x-2">
+          {isFreemium && (
+            <div className="px-3 py-2 text-xs text-amber-400 bg-amber-500/10 rounded-md">
+              Freemium Mode
             </div>
-          </SidebarHeader>
-          
-          <SidebarContent className="px-2 py-4 overflow-y-auto">
-            <TransactionSessionsSidebar />
-          </SidebarContent>
-          
-          <SidebarFooter className="border-t border-gray-800 p-4">
-            <div className="flex flex-col space-y-2">
-              <Link 
-                href="/"
-                className="w-full py-2 px-3 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors flex items-center justify-center"
-              >
-                Back to Home
-              </Link>
-              {isFreemium && (
-                <div className="px-3 py-2 text-xs text-amber-400 bg-amber-500/10 rounded-md">
-                  Running in Freemium Mode
-                </div>
-              )}
-            </div>
-          </SidebarFooter>
-        </Sidebar>
-        
-        <div className="flex-1 w-full overflow-auto h-full flex flex-col">
-          <div className="sticky top-0 z-10 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 flex items-center p-4">
-            <Toggle>
-              <PanelLeft className="h-5 w-5" />
-              <span className="sr-only">Toggle Sidebar</span>
-            </Toggle>
-            <div className="ml-4">
-              <h1 className="text-xl font-semibold text-white">Blockchain Explorer Dashboard</h1>
-            </div>
-          </div>
-          
-          <main className="p-4 flex-1 overflow-auto w-full">
-            {children}
-          </main>
+          )}
+          <Link 
+            href="/"
+            className="flex items-center text-gray-300 hover:text-white transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+            </svg>
+            Return Home
+          </Link>
         </div>
       </div>
-    </SidebarProvider>
+      
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        {children}
+      </div>
+    </div>
   );
-} 
+}
