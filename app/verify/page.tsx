@@ -42,14 +42,14 @@ export default function VerifyPage() {
       if (isBrowser) {
         const selfVerified = localStorage.getItem('selfVerified') === 'true';
         setIsVerified(selfVerified);
+        
+        // If already verified, redirect to dashboard
+        if (selfVerified) {
+          router.push('/dashboard');
+        }
       }
     }
   }, [ready, authenticated, user, router, isBrowser]);
-
-  const handleSkipVerification = () => {
-    toast.info('Proceeding without verification. Some features will be limited.');
-    router.push('/dashboard');
-  };
 
   const handleConnectWallet = async () => {
     setIsConnectingWallet(true);
@@ -203,16 +203,9 @@ export default function VerifyPage() {
                           !walletAddress 
                             ? 'bg-gray-600 cursor-not-allowed' 
                             : 'bg-blue-600 hover:bg-blue-500'
-                        } text-white px-5 py-2 rounded-lg font-medium transition-colors`}
+                        } text-white px-5 py-2 rounded-lg font-medium transition-colors w-full`}
                       >
                         Start Verification
-                      </button>
-                      
-                      <button
-                        onClick={handleSkipVerification}
-                        className="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg font-medium transition-colors"
-                      >
-                        Skip Verification
                       </button>
                     </div>
                   </div>

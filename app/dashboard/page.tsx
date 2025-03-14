@@ -16,6 +16,8 @@ import {
   NodeType,
   generateRelevantAddressDetails
 } from '../../lib/mock-data';
+import { useRouter } from 'next/navigation';
+import { usePrivyAuth } from '@/hooks/use-privy-auth';
 
 // Import the Node and Edge types from the graph visualization component
 type Node = {
@@ -41,6 +43,18 @@ type AddressListItem = {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { authenticated } = usePrivyAuth();
+  
+  // Check access permissions
+  useEffect(() => {
+    const isFreemium = localStorage.getItem('freemiumEnabled') === 'true';
+    if (!isFreemium && !authenticated) {
+      // If not in freemium mode and not authenticated, redirect to home
+      window.location.href = '/';
+    }
+  }, [authenticated]);
+
   // State for graph data
   const [graphData, setGraphData] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   
@@ -68,6 +82,47 @@ export default function DashboardPage() {
   
   // State to trigger chat reset (using a number that increments)
   const [chatResetKey, setChatResetKey] = useState(0);
+  
+  // Initialize with test data if in freemium mode
+  useEffect(() => {
+    const isFreemium = localStorage.getItem('freemiumEnabled') === 'true';
+    const testAddress = localStorage.getItem('testAddress');
+    
+    if (isFreemium) {
+      // Set chat visible to guide users
+      setIsChatVisible(true);
+      
+      if (testAddress) {
+        // If there's a test address, load its data
+        const initialData = generateMockGraphData(testAddress);
+        setGraphData(initialData);
+        setSelectedAddress(testAddress);
+        
+        // Generate mock address details
+        const details = generateMockAddressDetails(testAddress, 'main');
+        setAddressDetails(details);
+        
+        // Generate address list with type casting to ensure correct type
+        const addressList = generateAddressList(initialData.nodes).map(item => ({
+          ...item,
+          type: item.type as NodeType
+        }));
+        setAddresses(addressList);
+        
+        // Set investigation state to ready
+        setInvestigationState('ready');
+        
+        // Add some initial strategies
+        const initialStrategies = generateMockStrategies(['token_transfers', 'nft_transfers']);
+        setStrategies(initialStrategies);
+      } else {
+        // If no test address, show empty state with chat prompt
+        setGraphData({ nodes: [], edges: [] });
+        setChatMessages(['Welcome to Freemium mode! Please enter an Ethereum address to start your investigation.']);
+        setInvestigationState('idle');
+      }
+    }
+  }, []);
   
   // Handle message submission from chatbox
   const handleMessageSubmit = (message: string) => {

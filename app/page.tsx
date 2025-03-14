@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { PricingBanner } from '@/components/ui/pricing-banner';
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
 import { Loader2 } from 'lucide-react';
+import { StatisticsSection } from '@/components/ui/statistics-section';
+import { toast } from 'sonner';
 
 export default function Page() {
   const { login, authenticated, ready } = usePrivyAuth();
@@ -17,9 +19,16 @@ export default function Page() {
     setIsLoggingIn(true);
     try {
       await login();
-      // Router will handle redirect after login
+      // After successful login, check if user is already verified
+      const isVerified = localStorage.getItem('selfVerified') === 'true';
+      if (isVerified) {
+        // If verified, redirect to dashboard using window.location for consistency
+        window.location.href = '/dashboard';
+      }
+      // If not verified, router will handle redirect to verify page
     } catch (error) {
       console.error('Login error:', error);
+      toast.error('Login failed. Please try again.');
     } finally {
       // Reset login state after a short delay
       setTimeout(() => {
@@ -29,7 +38,12 @@ export default function Page() {
   };
 
   const handleFreemiumAccess = () => {
-    router.push('/dashboard');
+    // Set freemium flag in localStorage
+    localStorage.setItem('freemiumEnabled', 'true');
+    // Clear any existing test address to ensure fresh start
+    localStorage.removeItem('testAddress');
+    // Use window.location.href for a hard navigation to ensure it persists
+    window.location.href = '/dashboard';
   };
 
   return (
@@ -121,25 +135,8 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-16 bg-gray-800/30">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
-              <h3 className="text-4xl font-bold text-blue-400 mb-2">10+</h3>
-              <p className="text-gray-300">Specialized Agents</p>
-            </div>
-            <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
-              <h3 className="text-4xl font-bold text-blue-400 mb-2">20+</h3>
-              <p className="text-gray-300">Blockchain Tools</p>
-            </div>
-            <div className="bg-gray-800/50 p-8 rounded-xl border border-gray-700">
-              <h3 className="text-4xl font-bold text-blue-400 mb-2">100%</h3>
-              <p className="text-gray-300">IP Protected on Story Protocol</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Statistics Section - Using our new component */}
+      <StatisticsSection />
 
       {/* Features Section */}
       <section id="features" className="py-20">
@@ -204,12 +201,12 @@ export default function Page() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section - Replace with a new CTA section */}
       <section className="py-20 bg-gradient-to-r from-blue-900/30 to-purple-900/30">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-6">Ready to explore blockchain data?</h2>
+          <h2 className="text-3xl font-bold mb-6">Start Your Blockchain Investigation</h2>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-10">
-            Sign in now to access powerful blockchain forensics tools and start analyzing on-chain activities.
+            Unlock powerful blockchain forensics tools and gain insights into on-chain activities with our advanced analytics platform.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <button
@@ -223,14 +220,14 @@ export default function Page() {
                   <span>Signing In...</span>
                 </>
               ) : (
-                <span>Login and Verify using Self Protocol</span>
+                <span>Login with Self Protocol</span>
               )}
             </button>
             <button
               onClick={handleFreemiumAccess}
               className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium text-lg transition-colors"
             >
-              Testing with Freemium Features
+              Try Freemium Features
             </button>
           </div>
         </div>
