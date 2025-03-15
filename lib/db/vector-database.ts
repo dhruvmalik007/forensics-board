@@ -51,7 +51,8 @@ export class VectorDatabase {
   /**
    * Create a new VectorDatabase instance
    * @param endpoint Weaviate endpoint URL
-   * @param apiKey API key for authentication
+   * @param apiKey Weaviate API key
+   * @param openaiApiKey OpenAI API key for embeddings
    */
   constructor(
     private endpoint: string = process.env.WEAVIATE_ENDPOINT || '',
@@ -61,16 +62,14 @@ export class VectorDatabase {
     if (!this.endpoint) {
       logger.warn('No Weaviate endpoint provided. Vector database operations will not work.');
     }
-    if (!this.apiKey) {
-      logger.warn('No Weaviate API key provided. Vector database operations will not work.');
-    }
   }
 
   /**
-   * Connect to the Weaviate instance
+   * Connect to the Weaviate database
+   * @returns True if connection was successful
    */
   async connect(): Promise<boolean> {
-    if (this.isConnected && this.client) {
+    if (this.isConnected) {
       return true;
     }
 
@@ -78,31 +77,34 @@ export class VectorDatabase {
       if (!this.endpoint) {
         throw new Error('Weaviate endpoint is required for connection');
       }
-      if (!this.apiKey) {
-        throw new Error('Weaviate API key is required for connection');
-      }
 
       logger.info(`Connecting to Weaviate at ${this.endpoint}`);
       
+      // Parse the endpoint to get host and port
+      const url = new URL(this.endpoint);
+      const host = url.hostname;
+      const port = url.port ? parseInt(url.port) : (url.protocol === 'https:' ? 443 : 80);
+      const secure = url.protocol === 'https:';
+      
+      // Connect to Weaviate using v3 client
       this.client = await weaviate.connectToCustom({
-        httpHost: this.endpoint,
-        httpPort: 443,
-        httpSecure: true,
-        grpcHost: this.endpoint,
-        grpcPort: 443,
-        grpcSecure: true,
+        httpHost: host,
+        httpPort: port,
+        grpcHost: host,
+        grpcPort: secure ? 443 : 80,
+        httpSecure: secure,
+        grpcSecure: secure,
         authCredentials: new ApiKey(this.apiKey),
         headers: {
           'X-OpenAI-Api-Key': this.openaiApiKey
         }
       });
       
-      this.isConnected = true;
-      logger.info('Successfully connected to Weaviate');
-      
-      // Initialize collections if they don't exist
+      // Initialize collections
       await this.initializeCollections();
       
+      this.isConnected = true;
+      logger.info('Successfully connected to Weaviate');
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -124,8 +126,7 @@ export class VectorDatabase {
   }
 
   /**
-   * Initialize collections if they don't exist
-   * This creates the necessary schema for our collections
+   * Initialize collections in Weaviate
    */
   private async initializeCollections(): Promise<void> {
     if (!this.client) {
@@ -133,188 +134,58 @@ export class VectorDatabase {
     }
 
     try {
-      // Check if collections exist
-      const collectionsData = await this.client.schema.objects.get();
-      const collections = collectionsData.objects || [];
-      const collectionNames = collections.map(c => c.class);
-
+      // Get existing collections
+      const collections = await this.client.collections.list();
+      const collectionNames = collections.map(c => c.name);
+      
       // Create Transactions collection if it doesn't exist
       if (!collectionNames.includes(TRANSACTIONS_COLLECTION)) {
-        await this.client.schema.classCreator()
-          .withClass({
-            class: TRANSACTIONS_COLLECTION,
-            description: 'Collection for blockchain transaction data with embeddings',
-            vectorizer: 'text2vec-openai', // Using OpenAI for embeddings
-            moduleConfig: {
-              'text2vec-openai': {
-                model: 'ada',
-                modelVersion: '002',
-                type: 'text'
-              }
-            },
-            properties: [
-              {
-                name: 'hash',
-                description: 'Transaction hash',
-                dataType: ['text'],
-              },
-              {
-                name: 'from',
-                description: 'Sender address',
-                dataType: ['text'],
-                indexFilterable: true,
-                indexSearchable: true,
-              },
-              {
-                name: 'to',
-                description: 'Receiver address',
-                dataType: ['text'],
-                indexFilterable: true,
-                indexSearchable: true,
-              },
-              {
-                name: 'value',
-                description: 'Transaction value',
-                dataType: ['text'],
-              },
-              {
-                name: 'timestamp',
-                description: 'Transaction timestamp',
-                dataType: ['date'],
-                indexFilterable: true,
-              },
-              {
-                name: 'chain',
-                description: 'Blockchain name',
-                dataType: ['text'],
-                indexFilterable: true,
-              },
-              {
-                name: 'blockNumber',
-                description: 'Block number',
-                dataType: ['int'],
-                indexFilterable: true,
-              },
-              {
-                name: 'category',
-                description: 'Transaction category',
-                dataType: ['text'],
-                indexFilterable: true,
-              },
-              {
-                name: 'metadata',
-                description: 'Additional transaction metadata',
-                dataType: ['text'],
-              },
-              {
-                name: 'content',
-                description: 'Transaction summary for vector embedding',
-                dataType: ['text'],
-                moduleConfig: {
-                  'text2vec-openai': {
-                    skip: false,
-                    vectorizePropertyName: true,
-                  }
-                },
-              }
-            ]
-          })
-          .do();
+        await this.client.collections.create({
+          name: TRANSACTIONS_COLLECTION,
+          description: 'Collection for blockchain transaction data with embeddings',
+          vectorizer: 'text2vec-openai',
+          vectorIndexConfig: {
+            distance: 'cosine'
+          },
+          properties: [
+            { name: 'hash', dataType: ['text'], description: 'Transaction hash' },
+            { name: 'from', dataType: ['text'], description: 'Sender address' },
+            { name: 'to', dataType: ['text'], description: 'Recipient address' },
+            { name: 'value', dataType: ['text'], description: 'Transaction value' },
+            { name: 'timestamp', dataType: ['text'], description: 'Transaction timestamp' },
+            { name: 'chain', dataType: ['text'], description: 'Blockchain name' },
+            { name: 'blockNumber', dataType: ['int'], description: 'Block number' },
+            { name: 'category', dataType: ['text'], description: 'Transaction category' },
+            { name: 'metadata', dataType: ['text'], description: 'Additional metadata in JSON format' }
+          ]
+        });
         
         logger.info(`Created ${TRANSACTIONS_COLLECTION} collection`);
       }
-
+      
       // Create Strategies collection if it doesn't exist
       if (!collectionNames.includes(STRATEGIES_COLLECTION)) {
-        await this.client.schema.classCreator()
-          .withClass({
-            class: STRATEGIES_COLLECTION,
-            description: 'Collection for blockchain sleuthing strategies',
-            vectorizer: 'text2vec-openai',
-            moduleConfig: {
-              'text2vec-openai': {
-                model: 'ada',
-                modelVersion: '002',
-                type: 'text'
-              }
-            },
-            properties: [
-              {
-                name: 'id',
-                description: 'Strategy ID',
-                dataType: ['text'],
-                indexFilterable: true,
-              },
-              {
-                name: 'name',
-                description: 'Strategy name',
-                dataType: ['text'],
-                indexFilterable: true,
-                indexSearchable: true,
-              },
-              {
-                name: 'description',
-                description: 'Strategy description',
-                dataType: ['text'],
-                moduleConfig: {
-                  'text2vec-openai': {
-                    skip: false,
-                    vectorizePropertyName: true,
-                  }
-                },
-              },
-              {
-                name: 'query',
-                description: 'Strategy query execution code',
-                dataType: ['text'],
-              },
-              {
-                name: 'parameters',
-                description: 'Strategy parameters',
-                dataType: ['text'],
-              },
-              {
-                name: 'analysisType',
-                description: 'Type of analysis',
-                dataType: ['text'],
-                indexFilterable: true,
-              },
-              {
-                name: 'targetChain',
-                description: 'Target blockchain',
-                dataType: ['text'],
-                indexFilterable: true,
-              },
-              {
-                name: 'createdAt',
-                description: 'Creation timestamp',
-                dataType: ['date'],
-                indexFilterable: true,
-              },
-              {
-                name: 'updatedAt',
-                description: 'Last update timestamp',
-                dataType: ['date'],
-                indexFilterable: true,
-              },
-              {
-                name: 'executionCount',
-                description: 'Number of executions',
-                dataType: ['int'],
-              },
-              {
-                name: 'successRate',
-                description: 'Success rate',
-                dataType: ['number'],
-              },
-              {
-                name: 'metadata',
-                description: 'Additional strategy metadata',
-                dataType: ['text'],
-              }
-            ]
-          })
-          .do();
+        await this.client.collections.create({
+          name: STRATEGIES_COLLECTION,
+          description: 'Collection for blockchain sleuthing strategies',
+          vectorizer: 'text2vec-openai',
+          vectorIndexConfig: {
+            distance: 'cosine'
+          },
+          properties: [
+            { name: 'name', dataType: ['text'], description: 'Strategy name' },
+            { name: 'description', dataType: ['text'], description: 'Strategy description' },
+            { name: 'query', dataType: ['text'], description: 'Query context in JSON format' },
+            { name: 'parameters', dataType: ['text'], description: 'Strategy parameters in JSON format' },
+            { name: 'analysisType', dataType: ['text'], description: 'Type of analysis' },
+            { name: 'targetChain', dataType: ['text'], description: 'Target blockchain' },
+            { name: 'createdAt', dataType: ['text'], description: 'Creation timestamp' },
+            { name: 'updatedAt', dataType: ['text'], description: 'Last updated timestamp' },
+            { name: 'executionCount', dataType: ['int'], description: 'Number of executions' },
+            { name: 'successRate', dataType: ['number'], description: 'Success rate (0-100)' },
+            { name: 'metadata', dataType: ['text'], description: 'Additional metadata in JSON format' }
+          ]
+        });
         
         logger.info(`Created ${STRATEGIES_COLLECTION} collection`);
       }
@@ -326,13 +197,13 @@ export class VectorDatabase {
   }
 
   /**
-   * Ensure connection is established before performing operations
+   * Ensure connection before performing operations
    */
   private async ensureConnection(): Promise<void> {
-    if (!this.isConnected || !this.client) {
+    if (!this.isConnected) {
       const connected = await this.connect();
       if (!connected) {
-        throw new Error('Failed to connect to Weaviate database');
+        throw new Error('Failed to connect to Weaviate');
       }
     }
   }
@@ -340,7 +211,7 @@ export class VectorDatabase {
   /**
    * Store a transaction in the vector database
    * @param transaction Transaction data
-   * @returns The ID of the stored transaction
+   * @returns Transaction ID (hash)
    */
   async storeTransaction(transaction: Transaction): Promise<string> {
     await this.ensureConnection();
@@ -350,37 +221,19 @@ export class VectorDatabase {
     }
     
     try {
-      logger.info(`Storing transaction ${transaction.hash} in vector database`);
+      logger.info(`Storing transaction ${transaction.hash}`);
       
-      // Generate a unique ID if not provided
-      const id = uuidv4();
-      
-      // Create a content field that combines important transaction data for embedding
-      const content = `
-        Transaction ${transaction.hash} from ${transaction.from} to ${transaction.to} 
-        with value ${transaction.value} on chain ${transaction.chain} 
-        at block ${transaction.blockNumber} timestamp ${transaction.timestamp}
-        in category ${transaction.category || 'unknown'}
-      `.trim();
-      
-      // Store the transaction
+      // Get the Transactions collection
       const transactionCollection = this.client.collections.get(TRANSACTIONS_COLLECTION);
+      
+      // Store transaction data
       await transactionCollection.data.insert({
-        id,
-        hash: transaction.hash,
-        from: transaction.from,
-        to: transaction.to,
-        value: transaction.value,
-        timestamp: transaction.timestamp,
-        chain: transaction.chain,
-        blockNumber: transaction.blockNumber,
-        category: transaction.category || 'unknown',
-        metadata: JSON.stringify(transaction.metadata || {}),
-        content
+        ...transaction,
+        metadata: transaction.metadata ? JSON.stringify(transaction.metadata) : undefined
       });
       
-      logger.info(`Successfully stored transaction ${transaction.hash} with ID ${id}`);
-      return id;
+      logger.info(`Successfully stored transaction ${transaction.hash}`);
+      return transaction.hash;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error(`Failed to store transaction: ${errorMessage}`);
@@ -389,9 +242,9 @@ export class VectorDatabase {
   }
 
   /**
-   * Store multiple transactions in the vector database
-   * @param transactions Array of transaction data
-   * @returns Array of stored transaction IDs
+   * Store multiple transactions in batch
+   * @param transactions Array of transactions
+   * @returns Array of transaction IDs (hashes)
    */
   async storeTransactions(transactions: Transaction[]): Promise<string[]> {
     await this.ensureConnection();
@@ -401,58 +254,44 @@ export class VectorDatabase {
     }
     
     try {
-      logger.info(`Storing ${transactions.length} transactions in vector database`);
+      logger.info(`Storing ${transactions.length} transactions in batch`);
       
+      // Get the Transactions collection
       const transactionCollection = this.client.collections.get(TRANSACTIONS_COLLECTION);
-      const objects = transactions.map(transaction => {
-        const id = uuidv4();
-        
-        // Create a content field that combines important transaction data for embedding
-        const content = `
-          Transaction ${transaction.hash} from ${transaction.from} to ${transaction.to} 
-          with value ${transaction.value} on chain ${transaction.chain} 
-          at block ${transaction.blockNumber} timestamp ${transaction.timestamp}
-          in category ${transaction.category || 'unknown'}
-        `.trim();
-        
-        return {
-          id,
-          hash: transaction.hash,
-          from: transaction.from,
-          to: transaction.to,
-          value: transaction.value,
-          timestamp: transaction.timestamp,
-          chain: transaction.chain,
-          blockNumber: transaction.blockNumber,
-          category: transaction.category || 'unknown',
-          metadata: JSON.stringify(transaction.metadata || {}),
-          content
-        };
-      });
       
-      // Insert transactions in batches
+      // Process transactions in batches of 100
       const batchSize = 100;
-      const ids: string[] = [];
+      const transactionIds: string[] = [];
       
-      for (let i = 0; i < objects.length; i += batchSize) {
-        const batch = objects.slice(i, i + batchSize);
-        await transactionCollection.data.insertMany(batch);
-        ids.push(...batch.map(obj => obj.id as string));
+      for (let i = 0; i < transactions.length; i += batchSize) {
+        const batch = transactions.slice(i, i + batchSize);
+        
+        // Prepare batch for insertion
+        const objects = batch.map(tx => ({
+          ...tx,
+          metadata: tx.metadata ? JSON.stringify(tx.metadata) : undefined
+        }));
+        
+        // Insert batch
+        await transactionCollection.data.insertMany(objects);
+        
+        // Collect transaction IDs
+        transactionIds.push(...batch.map(tx => tx.hash));
       }
       
-      logger.info(`Successfully stored ${transactions.length} transactions`);
-      return ids;
+      logger.info(`Successfully stored ${transactionIds.length} transactions`);
+      return transactionIds;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to store transactions: ${errorMessage}`);
-      throw new Error(`Failed to store transactions: ${errorMessage}`);
+      logger.error(`Failed to store transactions in batch: ${errorMessage}`);
+      throw new Error(`Failed to store transactions in batch: ${errorMessage}`);
     }
   }
 
   /**
    * Store a strategy in the vector database
-   * @param strategy Strategy data
-   * @returns The ID of the stored strategy
+   * @param strategy Strategy data without ID and createdAt
+   * @returns Generated strategy ID
    */
   async storeStrategy(strategy: Omit<Strategy, 'id' | 'createdAt'>): Promise<string> {
     await this.ensureConnection();
@@ -462,26 +301,28 @@ export class VectorDatabase {
     }
     
     try {
-      logger.info(`Storing strategy ${strategy.name} in vector database`);
+      logger.info(`Storing new strategy`);
       
-      // Generate a unique ID
+      // Generate ID and timestamps
       const id = uuidv4();
       const now = new Date().toISOString();
       
-      // Store the strategy
+      // Get the Strategies collection
       const strategyCollection = this.client.collections.get(STRATEGIES_COLLECTION);
+      
+      // Store strategy data
       await strategyCollection.data.insert({
         id,
         ...strategy,
-        parameters: JSON.stringify(strategy.parameters || {}),
-        metadata: JSON.stringify(strategy.metadata || {}),
+        parameters: strategy.parameters ? JSON.stringify(strategy.parameters) : undefined,
+        metadata: strategy.metadata ? JSON.stringify(strategy.metadata) : undefined,
         createdAt: now,
         updatedAt: now,
         executionCount: 0,
         successRate: 0
       });
       
-      logger.info(`Successfully stored strategy ${strategy.name} with ID ${id}`);
+      logger.info(`Successfully stored strategy with ID ${id}`);
       return id;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -493,8 +334,8 @@ export class VectorDatabase {
   /**
    * Update a strategy in the vector database
    * @param id Strategy ID
-   * @param updates Strategy updates
-   * @returns True if successful
+   * @param updates Partial strategy data
+   * @returns True if update was successful
    */
   async updateStrategy(id: string, updates: Partial<Omit<Strategy, 'id' | 'createdAt'>>): Promise<boolean> {
     await this.ensureConnection();
@@ -504,26 +345,22 @@ export class VectorDatabase {
     }
     
     try {
-      logger.info(`Updating strategy ${id} in vector database`);
+      logger.info(`Updating strategy ${id}`);
       
-      // Prepare the updates
+      // Prepare update data
       const now = new Date().toISOString();
-      const updateData: Record<string, any> = {
+      const updateData = {
         ...updates,
+        parameters: updates.parameters ? JSON.stringify(updates.parameters) : undefined,
+        metadata: updates.metadata ? JSON.stringify(updates.metadata) : undefined,
         updatedAt: now
       };
       
-      // Convert objects to strings for storage
-      if (updateData.parameters) {
-        updateData.parameters = JSON.stringify(updateData.parameters);
-      }
-      if (updateData.metadata) {
-        updateData.metadata = JSON.stringify(updateData.metadata);
-      }
-      
       // Update the strategy
       const strategyCollection = this.client.collections.get(STRATEGIES_COLLECTION);
-      await strategyCollection.data.update(id, updateData);
+      await strategyCollection.data.update(
+        { id, ...updateData }
+      );
       
       logger.info(`Successfully updated strategy ${id}`);
       return true;
@@ -535,10 +372,10 @@ export class VectorDatabase {
   }
 
   /**
-   * Increment the execution count for a strategy
+   * Track strategy execution and update success rate
    * @param id Strategy ID
-   * @param success Whether the execution was successful
-   * @returns Updated execution count and success rate
+   * @param success Whether execution was successful
+   * @returns Updated executionCount and successRate
    */
   async trackStrategyExecution(id: string, success: boolean): Promise<{executionCount: number, successRate: number}> {
     await this.ensureConnection();
@@ -548,33 +385,34 @@ export class VectorDatabase {
     }
     
     try {
-      logger.info(`Tracking execution for strategy ${id}`);
+      logger.info(`Tracking execution for strategy ${id}, success: ${success}`);
       
-      // Get the current strategy
+      // Get the strategy
       const strategyCollection = this.client.collections.get(STRATEGIES_COLLECTION);
-      const strategyResult = await strategyCollection.query.fetchObjects({
-        where: {
-          operator: 'Equal',
+      const result = await strategyCollection.query.fetch({
+        filter: {
           path: ['id'],
+          operator: 'Equal',
           valueText: id
         }
       });
       
-      if (!strategyResult.data || strategyResult.data.length === 0) {
+      if (!result.data || result.data.length === 0) {
         throw new Error(`Strategy with ID ${id} not found`);
       }
       
-      const strategy = strategyResult.data[0];
+      const strategy = result.data[0];
       
       // Calculate new execution count and success rate
       const executionCount = (strategy.executionCount || 0) + 1;
       const successCount = success 
-        ? ((strategy.executionCount || 0) * (strategy.successRate || 0) / 100) + 1 
-        : ((strategy.executionCount || 0) * (strategy.successRate || 0) / 100);
-      const successRate = (successCount / executionCount) * 100;
+        ? (strategy.successRate || 0) * (strategy.executionCount || 0) / 100 + 1
+        : (strategy.successRate || 0) * (strategy.executionCount || 0) / 100;
+      const successRate = Math.round((successCount / executionCount) * 100);
       
       // Update the strategy
-      await strategyCollection.data.update(id, {
+      await strategyCollection.data.update({
+        id,
         executionCount,
         successRate,
         updatedAt: new Date().toISOString()
@@ -590,7 +428,7 @@ export class VectorDatabase {
   }
 
   /**
-   * Search for similar transactions based on a query
+   * Search for transactions similar to a query
    * @param query Search query
    * @param params Search parameters
    * @returns Array of matching transactions
@@ -608,52 +446,46 @@ export class VectorDatabase {
       const transactionCollection = this.client.collections.get(TRANSACTIONS_COLLECTION);
       
       // Build the query
-      let searchBuilder = transactionCollection.query.nearText({
-        concepts: [query],
-      });
+      let filter = undefined;
       
       // Apply filters if provided
       if (params.filters) {
-        const whereFilter = this.buildWhereFilter(params.filters);
-        if (whereFilter) {
-          searchBuilder = searchBuilder.withWhere(whereFilter);
-        }
-      }
-      
-      // Apply pagination
-      if (params.limit) {
-        searchBuilder = searchBuilder.withLimit(params.limit);
-      }
-      if (params.offset) {
-        searchBuilder = searchBuilder.withOffset(params.offset);
+        filter = this.buildWhereFilter(params.filters);
       }
       
       // Execute the search
-      const result = await searchBuilder.do();
+      const result = await transactionCollection.query.nearText({
+        query,
+        filter,
+        limit: params.limit,
+        offset: params.offset
+      });
       
-      if (!result.data || !result.data.Get || !result.data.Get[TRANSACTIONS_COLLECTION]) {
+      if (!result.data) {
         return [];
       }
       
-      const transactions = result.data.Get[TRANSACTIONS_COLLECTION];
-      
-      // Parse the JSON fields
-      return transactions.map((tx: any) => ({
-        ...tx,
-        metadata: tx.metadata ? JSON.parse(tx.metadata) : {},
-      }));
+      // Format the results
+      return result.data.map(item => {
+        // Parse JSON fields
+        const metadata = item.metadata ? JSON.parse(item.metadata as string) : undefined;
+        
+        return {
+          ...item,
+          metadata
+        };
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to search transactions: ${errorMessage}`);
-      throw new Error(`Failed to search transactions: ${errorMessage}`);
+      logger.error(`Failed to search similar transactions: ${errorMessage}`);
+      return [];
     }
   }
 
   /**
-   * Find similar strategies based on a description
-   * This implements the "Searches Chroma vector DB for similar past strategies" step from the MVP spec
-   * @param description Strategy description
-   * @param analysisType Type of analysis
+   * Find strategies similar to a description
+   * @param description Strategy description to match
+   * @param analysisType Optional analysis type filter
    * @param params Search parameters
    * @returns Array of matching strategies
    */
@@ -1074,6 +906,126 @@ export class VectorDatabase {
       operator: 'And',
       operands
     };
+  }
+
+  /**
+   * Store a strategy from scratch when no similar strategies are found
+   * @param context The strategy context
+   * @param analysisRequest The user's analysis request
+   * @param result The strategy execution result
+   * @returns The stored strategy ID
+   */
+  async storeNewStrategy(
+    context: {
+      address: string,
+      blockchainType: string,
+      strategyId: string,
+      params?: Record<string, any>
+    },
+    analysisRequest: string,
+    result: any
+  ): Promise<string> {
+    await this.ensureConnection();
+    
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
+    
+    try {
+      logger.info(`Storing new strategy from analysis request`);
+      
+      // Generate a unique ID
+      const id = uuidv4();
+      const now = new Date().toISOString();
+      
+      // Create a more descriptive strategy name based on the request
+      const name = `${context.blockchainType.toUpperCase()} Strategy - ${
+        analysisRequest.length > 30 
+          ? analysisRequest.substring(0, 30) + '...' 
+          : analysisRequest
+      }`;
+      
+      // Store the strategy
+      const strategyCollection = this.client.collections.get(STRATEGIES_COLLECTION);
+      await strategyCollection.data.insert({
+        id,
+        name,
+        description: analysisRequest,
+        query: JSON.stringify(context),
+        parameters: JSON.stringify(context.params || {}),
+        analysisType: context.strategyId,
+        targetChain: context.blockchainType,
+        createdAt: now,
+        updatedAt: now,
+        executionCount: 1,
+        successRate: 100,
+        metadata: JSON.stringify({
+          initialAddress: context.address,
+          resultNodes: result.nodes.length,
+          resultEdges: result.edges.length
+        })
+      });
+      
+      logger.info(`Successfully stored new strategy with ID ${id}`);
+      return id;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to store new strategy: ${errorMessage}`);
+      throw new Error(`Failed to store new strategy: ${errorMessage}`);
+    }
+  }
+  
+  /**
+   * Associate transaction data with a strategy
+   * @param strategyId The ID of the strategy that generated the transactions
+   * @param transactions The transaction data to store
+   * @returns Array of stored transaction IDs
+   */
+  async storeStrategyTransactions(
+    strategyId: string,
+    transactions: any[]
+  ): Promise<string[]> {
+    await this.ensureConnection();
+    
+    if (!this.client) {
+      throw new Error('Client not initialized');
+    }
+    
+    try {
+      logger.info(`Storing ${transactions.length} transactions for strategy ${strategyId}`);
+      
+      // Get strategy details
+      const strategy = await this.getStrategyById(strategyId);
+      if (!strategy) {
+        throw new Error(`Strategy with ID ${strategyId} not found`);
+      }
+      
+      // Store transactions with strategy context
+      const transactionIds = await this.storeTransactions(
+        transactions.map(tx => ({
+          ...tx,
+          metadata: {
+            ...(tx.metadata || {}),
+            strategyId,
+            strategyName: strategy.name
+          }
+        }))
+      );
+      
+      // Update strategy with new transaction count
+      await this.updateStrategy(strategyId, {
+        metadata: {
+          ...(strategy.metadata || {}),
+          transactionCount: (strategy.metadata?.transactionCount || 0) + transactions.length
+        }
+      });
+      
+      return transactionIds;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to store strategy transactions: ${errorMessage}`);
+      throw new Error(`Failed to store strategy transactions: ${errorMessage}`);
+    }
   }
 }
 

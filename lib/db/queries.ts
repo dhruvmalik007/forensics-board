@@ -4,26 +4,8 @@ import { genSaltSync, hashSync } from 'bcrypt-ts';
 import { and, asc, desc, eq, gt, gte, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-
-import {
-  user,
-  chat,
-  type User,
-  document,
-  type Suggestion,
-  suggestion,
-  type Message,
-  message,
-  vote,
-  userSession,
-  type UserSession,
-  agentSession,
-  type AgentSession,
-  agentExecutionLog,
-  type AgentExecutionLog,
-  blockchainExploration,
-  type BlockchainExploration,
-} from './schema';
+import { v4 as uuidv4 } from 'uuid';
+import { MySQLClient } from './mysql-client';
 import { ArtifactKind } from '@/components/artifact';
 
 // Optionally, if not using email/pass login, you can
@@ -34,20 +16,34 @@ import { ArtifactKind } from '@/components/artifact';
 const client = postgres(process.env.POSTGRES_URL!);
 const db = drizzle(client);
 
+// Get the MySQL client instance
+import { getMySQLClient } from './index';
+
+let mysqlClient: MySQLClient;
+
+// Ensure we have a MySQL client
+const ensureClient = async (): Promise<void> => {
+  if (!mysqlClient) {
+    mysqlClient = await getMySQLClient();
+  }
+};
+
 // User Management Functions
 
-export async function getUser(email: string): Promise<Array<User>> {
+export async function getUser(email: string): Promise<Array<any>> {
   try {
-    return await db.select().from(user).where(eq(user.email, email));
+    await ensureClient();
+    return await mysqlClient.query('SELECT * FROM User WHERE email = ?', [email]);
   } catch (error) {
     console.error('Failed to get user from database');
     throw error;
   }
 }
 
-export async function getUserByPrivyDID(privyDID: string): Promise<User | undefined> {
+export async function getUserByPrivyDID(privyDID: string): Promise<any | undefined> {
   try {
-    const users = await db.select().from(user).where(eq(user.privyDID, privyDID));
+    await ensureClient();
+    const users = await mysqlClient.query('SELECT * FROM User WHERE privyDID = ?', [privyDID]);
     return users[0];
   } catch (error) {
     console.error('Failed to get user by Privy DID from database');
@@ -55,9 +51,10 @@ export async function getUserByPrivyDID(privyDID: string): Promise<User | undefi
   }
 }
 
-export async function getUserByWalletAddress(walletAddress: string): Promise<User | undefined> {
+export async function getUserByWalletAddress(walletAddress: string): Promise<any | undefined> {
   try {
-    const users = await db.select().from(user).where(eq(user.walletAddress, walletAddress));
+    await ensureClient();
+    const users = await mysqlClient.query('SELECT * FROM User WHERE walletAddress = ?', [walletAddress]);
     return users[0];
   } catch (error) {
     console.error('Failed to get user by wallet address from database');
@@ -68,14 +65,16 @@ export async function getUserByWalletAddress(walletAddress: string): Promise<Use
 export async function createUser(email: string, password: string) {
   const salt = genSaltSync(10);
   const hash = hashSync(password, salt);
+  const id = uuidv4();
+  const now = new Date();
 
   try {
-    return await db.insert(user).values({ 
-      email, 
-      password: hash,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO User (id, email, password, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)',
+      [id, email, hash, now, now]
+    );
+    return { id, email };
   } catch (error) {
     console.error('Failed to create user in database');
     throw error;
@@ -91,14 +90,16 @@ export async function createPrivyUser({
   email?: string; 
   walletAddress?: string;
 }) {
+  const id = uuidv4();
+  const now = new Date();
+
   try {
-    return await db.insert(user).values({
-      privyDID,
-      email,
-      walletAddress,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO User (id, privyDID, email, walletAddress, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, privyDID, email || null, walletAddress || null, now, now]
+    );
+    return { id, privyDID, email, walletAddress };
   } catch (error) {
     console.error('Failed to create Privy user in database');
     throw error;
@@ -112,14 +113,16 @@ export async function updateUserVerificationStatus({
   userId: string;
   isVerified: boolean;
 }) {
+  const now = new Date();
+  const verificationDate = isVerified ? now : null;
+
   try {
-    return await db.update(user)
-      .set({ 
-        isVerified, 
-        verificationDate: isVerified ? new Date() : null,
-        updatedAt: new Date()
-      })
-      .where(eq(user.id, userId));
+    await ensureClient();
+    await mysqlClient.query(
+      'UPDATE User SET isVerified = ?, verificationDate = ?, updatedAt = ? WHERE id = ?',
+      [isVerified, verificationDate, now, userId]
+    );
+    return { userId, isVerified, verificationDate };
   } catch (error) {
     console.error('Failed to update user verification status in database');
     throw error;
@@ -133,13 +136,15 @@ export async function updateUserWalletAddress({
   userId: string;
   walletAddress: string;
 }) {
+  const now = new Date();
+
   try {
-    return await db.update(user)
-      .set({ 
-        walletAddress,
-        updatedAt: new Date()
-      })
-      .where(eq(user.id, userId));
+    await ensureClient();
+    await mysqlClient.query(
+      'UPDATE User SET walletAddress = ?, updatedAt = ? WHERE id = ?',
+      [walletAddress, now, userId]
+    );
+    return { userId, walletAddress };
   } catch (error) {
     console.error('Failed to update user wallet address in database');
     throw error;
@@ -160,21 +165,23 @@ export async function createUserSession({
   ipAddress?: string;
   userAgent?: string;
   expiresAt?: Date;
-}): Promise<UserSession> {
+}): Promise<any> {
+  const id = uuidv4();
+  const now = new Date();
+
   try {
-    const [session] = await db.insert(userSession)
-      .values({
-        userId,
-        loginMethod,
-        ipAddress,
-        userAgent,
-        createdAt: new Date(),
-        expiresAt,
-        isActive: true
-      })
-      .returning();
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO UserSession (id, userId, loginMethod, ipAddress, userAgent, createdAt, expiresAt, isActive) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, userId, loginMethod, ipAddress || null, userAgent || null, now, expiresAt || null, true]
+    );
     
-    return session;
+    const sessions = await mysqlClient.query(
+      'SELECT * FROM UserSession WHERE id = ?',
+      [id]
+    );
+    
+    return sessions[0];
   } catch (error) {
     console.error('Failed to create user session in database');
     throw error;
@@ -183,23 +190,25 @@ export async function createUserSession({
 
 export async function deactivateUserSession(sessionId: string) {
   try {
-    return await db.update(userSession)
-      .set({ isActive: false })
-      .where(eq(userSession.id, sessionId));
+    await ensureClient();
+    await mysqlClient.query(
+      'UPDATE UserSession SET isActive = ? WHERE id = ?',
+      [false, sessionId]
+    );
+    return { sessionId, isActive: false };
   } catch (error) {
     console.error('Failed to deactivate user session in database');
     throw error;
   }
 }
 
-export async function getActiveUserSessions(userId: string): Promise<UserSession[]> {
+export async function getActiveUserSessions(userId: string): Promise<any[]> {
   try {
-    return await db.select()
-      .from(userSession)
-      .where(and(
-        eq(userSession.userId, userId),
-        eq(userSession.isActive, true)
-      ));
+    await ensureClient();
+    return await mysqlClient.query(
+      'SELECT * FROM UserSession WHERE userId = ? AND isActive = ?',
+      [userId, true]
+    );
   } catch (error) {
     console.error('Failed to get active user sessions from database');
     throw error;
@@ -218,20 +227,23 @@ export async function createAgentSession({
   chatId: string;
   agentType: string;
   metadata?: any;
-}): Promise<AgentSession> {
+}): Promise<any> {
+  const id = uuidv4();
+  const now = new Date();
+
   try {
-    const [session] = await db.insert(agentSession)
-      .values({
-        userId,
-        chatId,
-        agentType,
-        startedAt: new Date(),
-        status: 'active',
-        metadata: metadata || {}
-      })
-      .returning();
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO AgentSession (id, userId, chatId, agentType, startedAt, status, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, userId, chatId, agentType, now, 'active', metadata || null]
+    );
     
-    return session;
+    const sessions = await mysqlClient.query(
+      'SELECT * FROM AgentSession WHERE id = ?',
+      [id]
+    );
+    
+    return sessions[0];
   } catch (error) {
     console.error('Failed to create agent session in database');
     throw error;
@@ -247,44 +259,50 @@ export async function updateAgentSessionStatus({
   status: 'active' | 'completed' | 'failed';
   metadata?: any;
 }) {
+  const now = new Date();
+  const updates: any = { status };
+  
+  if (status === 'completed' || status === 'failed') {
+    updates.endedAt = now;
+  }
+  
+  if (metadata) {
+    updates.metadata = metadata;
+  }
+
   try {
-    const updates: any = { status };
-    
-    if (status === 'completed' || status === 'failed') {
-      updates.endedAt = new Date();
-    }
-    
-    if (metadata) {
-      updates.metadata = metadata;
-    }
-    
-    return await db.update(agentSession)
-      .set(updates)
-      .where(eq(agentSession.id, sessionId));
+    await ensureClient();
+    await mysqlClient.query(
+      'UPDATE AgentSession SET status = ?, endedAt = ?, metadata = ? WHERE id = ?',
+      [status, status === 'completed' || status === 'failed' ? now : null, metadata, sessionId]
+    );
+    return { sessionId, status, endedAt: updates.endedAt, metadata: updates.metadata };
   } catch (error) {
     console.error('Failed to update agent session status in database');
     throw error;
   }
 }
 
-export async function getAgentSessionsByUserId(userId: string): Promise<AgentSession[]> {
+export async function getAgentSessionsByUserId(userId: string): Promise<any[]> {
   try {
-    return await db.select()
-      .from(agentSession)
-      .where(eq(agentSession.userId, userId))
-      .orderBy(desc(agentSession.startedAt));
+    await ensureClient();
+    return await mysqlClient.query(
+      'SELECT * FROM AgentSession WHERE userId = ? ORDER BY startedAt DESC',
+      [userId]
+    );
   } catch (error) {
     console.error('Failed to get agent sessions by user ID from database');
     throw error;
   }
 }
 
-export async function getAgentSessionById(sessionId: string): Promise<AgentSession | undefined> {
+export async function getAgentSessionById(sessionId: string): Promise<any | undefined> {
   try {
-    const sessions = await db.select()
-      .from(agentSession)
-      .where(eq(agentSession.id, sessionId));
-    
+    await ensureClient();
+    const sessions = await mysqlClient.query(
+      'SELECT * FROM AgentSession WHERE id = ?',
+      [sessionId]
+    );
     return sessions[0];
   } catch (error) {
     console.error('Failed to get agent session by ID from database');
@@ -308,33 +326,36 @@ export async function createAgentExecutionLog({
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   message?: string;
   metadata?: any;
-}): Promise<AgentExecutionLog> {
+}): Promise<any> {
+  const id = uuidv4();
+  const now = new Date();
+
   try {
-    const [log] = await db.insert(agentExecutionLog)
-      .values({
-        agentSessionId,
-        stepId,
-        stepName,
-        status,
-        message,
-        timestamp: new Date(),
-        metadata: metadata || {}
-      })
-      .returning();
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO AgentExecutionLog (id, agentSessionId, stepId, stepName, status, message, timestamp, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, agentSessionId, stepId, stepName, status, message, now, metadata || null]
+    );
     
-    return log;
+    const logs = await mysqlClient.query(
+      'SELECT * FROM AgentExecutionLog WHERE id = ?',
+      [id]
+    );
+    
+    return logs[0];
   } catch (error) {
     console.error('Failed to create agent execution log in database');
     throw error;
   }
 }
 
-export async function getAgentExecutionLogsBySessionId(sessionId: string): Promise<AgentExecutionLog[]> {
+export async function getAgentExecutionLogsBySessionId(sessionId: string): Promise<any[]> {
   try {
-    return await db.select()
-      .from(agentExecutionLog)
-      .where(eq(agentExecutionLog.agentSessionId, sessionId))
-      .orderBy(asc(agentExecutionLog.timestamp));
+    await ensureClient();
+    return await mysqlClient.query(
+      'SELECT * FROM AgentExecutionLog WHERE agentSessionId = ? ORDER BY timestamp ASC',
+      [sessionId]
+    );
   } catch (error) {
     console.error('Failed to get agent execution logs by session ID from database');
     throw error;
@@ -355,21 +376,23 @@ export async function createBlockchainExploration({
   query: string;
   address?: string;
   network?: string;
-}): Promise<BlockchainExploration> {
+}): Promise<any> {
+  const id = uuidv4();
+  const now = new Date();
+
   try {
-    const [exploration] = await db.insert(blockchainExploration)
-      .values({
-        userId,
-        documentId,
-        query,
-        address,
-        network,
-        createdAt: new Date(),
-        status: 'pending'
-      })
-      .returning();
+    await ensureClient();
+    await mysqlClient.query(
+      'INSERT INTO BlockchainExploration (id, userId, documentId, query, address, network, createdAt, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, userId, documentId, query, address, network, now, 'pending']
+    );
     
-    return exploration;
+    const explorations = await mysqlClient.query(
+      'SELECT * FROM BlockchainExploration WHERE id = ?',
+      [id]
+    );
+    
+    return explorations[0];
   } catch (error) {
     console.error('Failed to create blockchain exploration in database');
     throw error;
@@ -385,33 +408,37 @@ export async function updateBlockchainExplorationStatus({
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   results?: any;
 }) {
+  const now = new Date();
+  const updates: any = { status };
+  
+  if (status === 'completed' || status === 'failed') {
+    updates.completedAt = now;
+  }
+  
+  if (results) {
+    updates.results = results;
+  }
+
   try {
-    const updates: any = { status };
-    
-    if (status === 'completed' || status === 'failed') {
-      updates.completedAt = new Date();
-    }
-    
-    if (results) {
-      updates.results = results;
-    }
-    
-    return await db.update(blockchainExploration)
-      .set(updates)
-      .where(eq(blockchainExploration.id, id));
+    await ensureClient();
+    await mysqlClient.query(
+      'UPDATE BlockchainExploration SET status = ?, completedAt = ?, results = ? WHERE id = ?',
+      [status, status === 'completed' || status === 'failed' ? now : null, results, id]
+    );
+    return { id, status, completedAt: updates.completedAt, results: updates.results };
   } catch (error) {
     console.error('Failed to update blockchain exploration status in database');
     throw error;
   }
 }
 
-export async function getBlockchainExplorationsByUserId(userId: string): Promise<BlockchainExploration[]> {
+export async function getBlockchainExplorationsByUserId(userId: string): Promise<any[]> {
   try {
-    return await db
-      .select()
-      .from(blockchainExploration)
-      .where(eq(blockchainExploration.userId, userId))
-      .orderBy(desc(blockchainExploration.createdAt));
+    await ensureClient();
+    return await mysqlClient.query(
+      'SELECT * FROM BlockchainExploration WHERE userId = ? ORDER BY createdAt DESC',
+      [userId]
+    );
   } catch (error) {
     console.error('Failed to get blockchain explorations by user ID from database');
     throw error;
@@ -420,9 +447,11 @@ export async function getBlockchainExplorationsByUserId(userId: string): Promise
 
 export async function deleteBlockchainExploration(id: string): Promise<void> {
   try {
-    await db
-      .delete(blockchainExploration)
-      .where(eq(blockchainExploration.id, id));
+    await ensureClient();
+    await mysqlClient.query(
+      'DELETE FROM BlockchainExploration WHERE id = ?',
+      [id]
+    );
   } catch (error) {
     console.error('Failed to delete blockchain exploration from database');
     throw error;

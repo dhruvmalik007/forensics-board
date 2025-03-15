@@ -234,12 +234,20 @@ export function TransactionSessionsSidebar() {
     return { today, yesterday, older };
   };
 
+  // If user is not authenticated or in freemium mode, show a simplified view
   if (!user) {
     return (
       <SidebarGroup>
+        <div className="px-2 py-1 text-xs text-sidebar-foreground/50">
+          Blockchain Explorations
+        </div>
         <SidebarGroupContent>
-          <div className="px-2 text-zinc-500 w-full flex flex-row justify-center items-center text-sm gap-2">
-            Login to view your blockchain explorations!
+          <div className="px-3 py-3 rounded-md bg-blue-900/20 text-blue-400 text-sm mb-3">
+            <p>You're in freemium mode. Start your exploration by entering an address in the chat.</p>
+          </div>
+          <div className="px-3 py-3 rounded-md bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors flex items-center justify-center">
+            <Search className="h-4 w-4 mr-2" />
+            <span>Search for an Address</span>
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -273,7 +281,13 @@ export function TransactionSessionsSidebar() {
   if (explorations.length === 0) {
     return (
       <SidebarGroup>
+        <div className="px-2 py-1 text-xs text-sidebar-foreground/50">
+          Blockchain Explorations
+        </div>
         <SidebarGroupContent>
+          <div className="px-3 py-3 rounded-md bg-blue-900/20 text-blue-400 text-sm mb-3">
+            <p>Enter an address in the chat to start your exploration.</p>
+          </div>
           <div className="px-2 text-zinc-500 w-full flex flex-row justify-center items-center text-sm gap-2 py-4">
             <Search className="h-4 w-4" />
             <span>No blockchain explorations yet</span>
