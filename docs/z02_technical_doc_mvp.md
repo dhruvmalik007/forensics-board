@@ -24,7 +24,7 @@ This document outlines the technical implementation of the MVP for the Blockchai
     ```json
     {
       "addresses": ["0x..."],
-      "analysis_type": "erc20_transfers"
+      "strategy_key": "erc20_transfers"
     }
     ```
   - Calls **Agentic Execution Engine**:

@@ -7,7 +7,7 @@ export type AnalysisMode = 'bidirectional_transfers' | 'funding_address';
 export type StrategyResponseItem = {
   observed_wallet_address: string;
   produced_wallet_address: string;
-  analysis_type: AnalysisMode;
+  strategy_key: AnalysisMode;
   proofs: string;
 };
 
@@ -50,7 +50,7 @@ export const runStrategy = async (
       },
       body: JSON.stringify({
         addresses,
-        analysis_type: analysisMode,
+        strategy_key: analysisMode,
       }),
     });
 
@@ -96,8 +96,8 @@ export const processStrategyResponse = (
     // Create edge based on the proof
     const edgeId = `${item.observed_wallet_address}-${item.produced_wallet_address}`;
     
-    // Determine edge type based on analysis_type
-    const edgeType = item.analysis_type === 'bidirectional_transfers' 
+    // Determine edge type based on strategy_key
+    const edgeType = item.strategy_key === 'bidirectional_transfers' 
       ? 'token_transfer' 
       : 'liquidity_provision';
     
