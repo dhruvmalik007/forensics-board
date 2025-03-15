@@ -10,13 +10,17 @@
     "test": "ts-node src/tests/lifi-scan-test.ts",
     "test:sdk": "ts-node src/tests/sdk-test.ts",
     "test:explorers": "ts-node src/tests/explorer-logs-test.ts",
+    "test:stagehand": "ts-node src/tests/stagehand-test.ts",
     "dev": "ts-node-dev --respawn src/index.ts"
   },
   "dependencies": {
     "@aws-sdk/client-elasticache": "^3.761.0",
     "@aws-sdk/client-neptune-graph": "^3.764.0",
     "@browserbasehq/sdk": "^1.0.0",
-    "@langchain/core": "^0.1.0",
+    "@browserbasehq/stagehand": "^1.14.0",
+    "@langchain/community": "^0.3.35",
+    "@langchain/core": "^0.1.63",
+    "@langchain/langgraph": "^0.2.55",
     "@langchain/openai": "^0.0.1",
     "@selfxyz/core": "^0.0.7",
     "@types/uuid": "^10.0.0",

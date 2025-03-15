@@ -5,10 +5,24 @@ export const ExplorerCategorySchema = z.enum([
   'EOAAddress',
   'ContractAddress',
   'TokenAddress',
-  
 ]);
 
 export type ExplorerCategory = z.infer<typeof ExplorerCategorySchema>;
+
+// Address category types
+export const AddressCategorySchema = z.enum([
+  'main',
+  'alt_wallet',
+  'cex',
+  'defi',
+  'bridge',
+  'mixer',
+  'contract',
+  'flagged',
+  'unknown'
+]);
+
+export type AddressCategory = z.infer<typeof AddressCategorySchema>;
 
 export const ChainExplorerSchema = z.object({
   project_name: z.string(),
@@ -33,6 +47,20 @@ export const TransactionSchema = z.object({
 
 export type Transaction = z.infer<typeof TransactionSchema>;
 
+// Address data types
+export const AddressInfoSchema = z.object({
+  address: z.string(),
+  category: AddressCategorySchema.optional(),
+  tags: z.array(z.string()).optional(),
+  label: z.string().optional(),
+  balance: z.string().optional(),
+  transactionCount: z.number().optional(),
+  firstSeen: z.string().optional(),
+  lastSeen: z.string().optional()
+});
+
+export type AddressInfo = z.infer<typeof AddressInfoSchema>;
+
 // Input types
 export const ScrapingInputSchema = z.object({
   address: z.string(),
@@ -45,6 +73,8 @@ export type ScrapingInput = z.infer<typeof ScrapingInputSchema>;
 export const ScrapingResultSchema = z.object({
   explorer: ChainExplorerSchema,
   transactions: z.array(TransactionSchema),
+  addressInfo: AddressInfoSchema.optional(),
+  relatedAddresses: z.array(AddressInfoSchema).optional(),
   metadata: z.object({
     total: z.number(),
     scraped: z.number(),

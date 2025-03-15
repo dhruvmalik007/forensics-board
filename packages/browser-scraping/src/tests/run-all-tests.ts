@@ -1,6 +1,5 @@
 #!/usr/bin/env ts-node
 
-import { runLifiScanTest } from './lifi-scan-test';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -17,7 +16,7 @@ if (result.error) {
 }
 
 // Validate required environment variables
-const requiredEnvVars = ['BROWSERBASE_API_KEY', 'BROWSERBASE_PROJECT_ID', 'OPENAI_API_KEY'];
+const requiredEnvVars = ['BROWSERBASE_API_KEY', 'OPENAI_API_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -33,7 +32,7 @@ if (missingEnvVars.length > 0) {
  * Run all tests and generate a comprehensive report
  */
 async function runAllTests() {
-  console.log('🚀 Running all browser scraping tests...');
+  console.log('🚀 Running Stagehand tests...');
   console.log('='.repeat(80));
   
   const startTime = Date.now();
@@ -45,43 +44,24 @@ async function runAllTests() {
     fs.mkdirSync(logsDir, { recursive: true });
   }
   
-  // Run LI.FI scan test
-  console.log('\n📊 Running LI.FI scan test...');
+  // Run Stagehand test
+  console.log('\n🎭 Running Stagehand test...');
   try {
-    const lifiResult = await runLifiScanTest();
-    results.lifi = {
-      success: true,
-      transactionsCount: lifiResult.result.transactions.length,
-      summaryLength: lifiResult.summary.length,
-      logCount: lifiResult.logs.length
-    };
-    console.log('✅ LI.FI scan test completed successfully');
-  } catch (error) {
-    results.lifi = {
-      success: false,
-      error: error instanceof Error ? error.message : String(error)
-    };
-    console.error('❌ LI.FI scan test failed:', error);
-  }
-  
-  // Run explorer logs test
-  console.log('\n📊 Running explorer logs test...');
-  try {
-    // Run the explorer logs test in a separate process to avoid log collector conflicts
-    execSync('npx ts-node src/tests/explorer-logs-test.ts', { 
+    // Run the Stagehand test
+    execSync('npx ts-node src/tests/stagehand-test.ts', { 
       stdio: 'inherit',
       env: process.env
     });
-    results.explorers = {
+    results.stagehand = {
       success: true
     };
-    console.log('✅ Explorer logs test completed successfully');
+    console.log('✅ Stagehand test completed successfully');
   } catch (error) {
-    results.explorers = {
+    results.stagehand = {
       success: false,
       error: error instanceof Error ? error.message : String(error)
     };
-    console.error('❌ Explorer logs test failed:', error);
+    console.error('❌ Stagehand test failed:', error);
   }
   
   // Generate report
@@ -111,42 +91,32 @@ async function runAllTests() {
  * Generate a comprehensive report
  */
 function generateReport(results: Record<string, any>, duration: number): string {
-  let report = `# Browser Scraping Test Report\n\n`;
+  let report = `# Stagehand Test Report\n\n`;
   report += `Generated: ${new Date().toISOString()}\n`;
   report += `Duration: ${duration.toFixed(2)} seconds\n\n`;
   
-  // LI.FI test results
-  report += `## LI.FI Scan Test\n\n`;
-  if (results.lifi?.success) {
-    report += `✅ **Success**\n\n`;
-    report += `- Transactions: ${results.lifi.transactionsCount}\n`;
-    report += `- Summary Length: ${results.lifi.summaryLength} characters\n`;
-    report += `- Log Count: ${results.lifi.logCount} entries\n`;
-  } else {
-    report += `❌ **Failed**\n\n`;
-    report += `- Error: ${results.lifi?.error || 'Unknown error'}\n`;
-  }
-  
-  // Explorer logs test results
-  report += `\n## Explorer Logs Test\n\n`;
-  if (results.explorers?.success) {
+  // Stagehand test results
+  report += `\n## Stagehand Test\n\n`;
+  if (results.stagehand?.success) {
     report += `✅ **Success**\n\n`;
     
-    // Count log files
+    // Count Stagehand log files
     const logsDir = path.join(__dirname, '..', '..', 'logs');
-    const logFiles = fs.readdirSync(logsDir).filter(file => file.endsWith('_logs.txt'));
+    const stagehandLogFiles = fs.readdirSync(logsDir).filter(file => 
+      file.startsWith('stagehand_') && file.endsWith('_logs.txt')
+    );
     
-    report += `- Log Files Generated: ${logFiles.length}\n`;
+    report += `- Log Files Generated: ${stagehandLogFiles.length}\n`;
     report += `- Log Files:\n`;
     
-    logFiles.forEach(file => {
+    stagehandLogFiles.forEach(file => {
       const stats = fs.statSync(path.join(logsDir, file));
       const sizeKb = (stats.size / 1024).toFixed(2);
       report += `  - ${file} (${sizeKb} KB)\n`;
     });
   } else {
     report += `❌ **Failed**\n\n`;
-    report += `- Error: ${results.explorers?.error || 'Unknown error'}\n`;
+    report += `- Error: ${results.stagehand?.error || 'Unknown error'}\n`;
   }
   
   // Anti-hallucination measures
@@ -163,8 +133,7 @@ function generateReport(results: Record<string, any>, duration: number): string 
 
 // If this file is run directly (not imported), run all tests
 if (require.main === module) {
-  console.log('Running all browser scraping tests...');
-  console.log('This will run the LI.FI scan test and the explorer logs test');
+  console.log('Running Stagehand tests...');
   console.log('-------------------------------------------------------------------');
 
   runAllTests()

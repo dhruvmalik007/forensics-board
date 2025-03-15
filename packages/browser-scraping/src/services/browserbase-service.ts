@@ -1,12 +1,13 @@
 import { ChainExplorer } from '../types';
 import { Browserbase } from '@browserbasehq/sdk';
+
 /**
- * Service for interacting with Browserbase
+ * Service for interacting with Browserbase for web scraping
  */
 export class BrowserbaseService {
   private apiKey: string;
   private projectId: string;
-  private browserbase: Browserbase; // Using any to avoid type errors with the SDK
+  private browserbase: any; // Using any type to avoid SDK compatibility issues
 
   constructor(apiKey?: string, projectId?: string) {
     this.apiKey = apiKey || process.env.BROWSERBASE_API_KEY || '';
@@ -20,8 +21,8 @@ export class BrowserbaseService {
       console.warn('No Browserbase Project ID provided. Browser automation will not work.');
     }
     
-    // Initialize the Browserbase SDK with the API key
-    this.browserbase = new Browserbase({ apiKey: this.apiKey, projectId: this.projectId });
+    // Initialize the Browserbase SDK
+    this.browserbase = new Browserbase({ apiKey: this.apiKey });
   }
 
   /**
@@ -55,10 +56,8 @@ export class BrowserbaseService {
         timeout: 60000, // 1 minute timeout
       });
       
-      // Connect to the page
-      const page = await this.browserbase.getSession({
-        sessionId: session.id,  
-      });
+      // Get the page object
+      const page = await this.browserbase.getSession(session.id);
       
       this.logOperation('SESSION_CREATE_SUCCESS', { sessionId: session.id });
       return { sessionId: session.id, page };
@@ -73,7 +72,7 @@ export class BrowserbaseService {
    * Navigate to a URL
    */
   async navigateTo(page: any, url: string): Promise<void> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('NAVIGATE_START', { sessionId, url });
     
     try {
@@ -91,7 +90,7 @@ export class BrowserbaseService {
    * Execute JavaScript in the browser
    */
   async executeScript<T>(page: any, script: string): Promise<T> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('EXECUTE_SCRIPT_START', { 
       sessionId,
       scriptLength: script.length,
@@ -118,7 +117,7 @@ export class BrowserbaseService {
    * Get the HTML content of the page
    */
   async getPageContent(page: any): Promise<string> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('GET_PAGE_CONTENT_START', { sessionId });
     
     try {
@@ -140,7 +139,7 @@ export class BrowserbaseService {
    * Wait for an element to be visible
    */
   async waitForElement(page: any, selector: string, timeout = 30000): Promise<boolean> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('WAIT_FOR_ELEMENT_START', { sessionId, selector, timeout });
     
     try {
@@ -163,7 +162,7 @@ export class BrowserbaseService {
    * Type text into an input field
    */
   async typeText(page: any, selector: string, text: string): Promise<void> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('TYPE_TEXT_START', { 
       sessionId, 
       selector, 
@@ -187,7 +186,7 @@ export class BrowserbaseService {
    * Click on an element
    */
   async clickElement(page: any, selector: string): Promise<void> {
-    const sessionId = page.sessionId;
+    const sessionId = page.sessionId || page._sessionId;
     this.logOperation('CLICK_ELEMENT_START', { sessionId, selector });
     
     try {
@@ -209,7 +208,7 @@ export class BrowserbaseService {
     
     try {
       // Close session using the SDK
-      await this.browserbase.sessions.close({ sessionId });
+      await this.browserbase.closeSession(sessionId);
       this.logOperation('SESSION_CLOSE_SUCCESS', { sessionId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
