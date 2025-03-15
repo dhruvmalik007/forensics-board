@@ -75,10 +75,28 @@ export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<
               if (row.proofs) {
                 // Handle different formats of proofs from Dune
                 if (Array.isArray(row.proofs)) {
-                  relationship.proofs = row.proofs as string[];
+                  // Ensure each proof follows the correct format
+                  relationship.proofs = (row.proofs as string[]).map(proof => {
+                    // Check if the proof already follows the correct format
+                    if (proof.startsWith('incoming:') || proof.startsWith('outcoming:')) {
+                      return proof;
+                    }
+                    
+                    // If not, default to incoming format
+                    return `incoming:${proof}`;
+                  });
                 } else if (typeof row.proofs === 'string') {
-                  // If proofs is a comma-separated string, split it
-                  relationship.proofs = (row.proofs as string).split(',').map(p => p.trim());
+                  // If proofs is a comma-separated string, split it and format each proof
+                  const proofArray = (row.proofs as string).split(',').map(p => p.trim());
+                  relationship.proofs = proofArray.map(proof => {
+                    // Check if the proof already follows the correct format
+                    if (proof.startsWith('incoming:') || proof.startsWith('outcoming:')) {
+                      return proof;
+                    }
+                    
+                    // If not, default to incoming format
+                    return `incoming:${proof}`;
+                  });
                 }
               }
               
