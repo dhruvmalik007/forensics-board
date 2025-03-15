@@ -4,13 +4,13 @@ import { RunQueryArgs, QueryParameter } from "@duneanalytics/client-sdk";
 // Define the types for the strategy
 export interface DuneStrategyRequest {
   addresses: string[];
-  analysis_type: string;
+  strategy_key: string;
 }
 
 export interface WalletRelationship {
   observed_wallet_address: string;
   produced_wallet_address: string;
-  analysis_type: string;
+  strategy_key: string;
   proofs?: string[];
 }
 
@@ -26,7 +26,7 @@ export interface WalletRelationship {
  * @returns An array of wallet relationships
  */
 export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<WalletRelationship[]> {
-  const { addresses, analysis_type } = params;
+  const { addresses, strategy_key } = params;
   
   // Map of analysis types to Dune query IDs
   const analysisTypeToQueryId: Record<string, number> = {
@@ -35,7 +35,7 @@ export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<
   };
   
   // Check if the analysis type is supported
-  const queryId = analysisTypeToQueryId[analysis_type];
+  const queryId = analysisTypeToQueryId[strategy_key];
   if (!queryId) {
     return [];
   }
@@ -68,7 +68,7 @@ export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<
               const relationship: WalletRelationship = {
                 observed_wallet_address: address,
                 produced_wallet_address: row.address as string,
-                analysis_type
+                strategy_key
               };
               
               // Extract proofs if available

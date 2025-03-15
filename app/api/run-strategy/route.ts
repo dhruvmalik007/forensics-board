@@ -4,7 +4,7 @@ import { canHandleAnalysisType, executeDuneStrategy } from '@/app/strategies/dun
 // Define the request payload type with array of addresses
 interface RunStrategyRequestPayload {
   addresses: string[];
-  analysis_type: string;
+  strategy_key: string;
 }
 
 // Mark this route as not requiring authentication
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * 
  * Accepts a JSON payload with:
  * - addresses: An array of blockchain addresses to analyze
- * - analysis_type: The type of analysis to perform
+ * - strategy_key: The type of analysis to perform
  * 
  * This endpoint will:
  * 1. Process the strategy request for the given addresses
@@ -38,17 +38,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    if (!payload.analysis_type) {
-      console.error('Missing required field: analysis_type');
+    if (!payload.strategy_key) {
+      console.error('Missing required field: strategy_key');
       return NextResponse.json(
-        { error: 'Missing required field: analysis_type' },
+        { error: 'Missing required field: strategy_key' },
         { status: 400 }
       );
     }
     
     // Check if we can handle this analysis type
-    const canHandle = canHandleAnalysisType(payload.analysis_type);
-    console.log(`Can handle analysis type '${payload.analysis_type}': ${canHandle}`);
+    const canHandle = canHandleAnalysisType(payload.strategy_key);
+    console.log(`Can handle analysis type '${payload.strategy_key}': ${canHandle}`);
     
     if (canHandle) {
       // Execute the Dune-based strategy
@@ -63,10 +63,10 @@ export async function POST(request: NextRequest) {
     }
     
     // For analysis types we don't handle yet
-    console.error(`Unsupported analysis type: ${payload.analysis_type}`);
+    console.error(`Unsupported analysis type: ${payload.strategy_key}`);
     return NextResponse.json({
       status: 'error',
-      message: `Unsupported analysis type: ${payload.analysis_type}`,
+      message: `Unsupported analysis type: ${payload.strategy_key}`,
       supportedTypes: ['bidirectional_transfers', 'funding_address']
     }, { status: 400 });
     
