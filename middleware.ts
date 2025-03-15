@@ -15,7 +15,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/chat') || // Allow chat routes without authentication
-    pathname.startsWith('/dashboard'); // Allow dashboard without authentication
+    pathname.startsWith('/dashboard') || // Allow dashboard without authentication
+    pathname.startsWith('/api/run-strategy'); // Allow run-strategy API without authentication
     
   // Respond to CORS preflight requests
   if (request.method === 'OPTIONS') {

@@ -23,9 +23,8 @@ This document outlines the technical implementation of the MVP for the Blockchai
   - Accepts JSON payload with:
     ```json
     {
-      "address": "0x...",
-      "analysis_type": "erc20_transfers",
-      "analysis_request": "Find all ERC-20 transfers related to this address"
+      "addresses": ["0x..."],
+      "analysis_type": "erc20_transfers"
     }
     ```
   - Calls **Agentic Execution Engine**:
