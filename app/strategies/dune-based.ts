@@ -31,7 +31,7 @@ export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<
   // Map of analysis types to Dune query IDs
   const analysisTypeToQueryId: Record<string, number> = {
     'bidirectional_transfers': 4777210,
-    'founding_address': 4777803
+    'funding_address': 4777803
   };
   
   // Check if the analysis type is supported
@@ -135,7 +135,7 @@ export async function executeDuneStrategy(params: DuneStrategyRequest): Promise<
 export function canHandleAnalysisType(analysisType: string): boolean {
   const supportedTypes = [
     'bidirectional_transfers',
-    'founding_address'
+    'funding_address'
   ];
   
   return supportedTypes.includes(analysisType);

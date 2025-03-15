@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { StrategyControlPanel, Strategy } from '../../components/dashboard/strategy-control-panel';
 import { GraphVisualization } from '../../components/dashboard/graph-visualization';
 import { ChatBox } from '../../components/dashboard/chat-box';
@@ -18,6 +18,9 @@ import {
 } from '../../lib/mock-data';
 import { useRouter } from 'next/navigation'
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
+import { useModeStore } from '@/lib/stores/mode-store';
+import { runStrategy, processStrategyResponse, AnalysisMode } from '@/lib/services/strategy-service';
+import { PredefinedStrategy } from '@/components/dashboard/investigation-input';
 
 // Import the Node and Edge types from the graph visualization component
 type Node = {
@@ -45,6 +48,14 @@ type AddressListItem = {
 export default function DashboardPage() {
   const router = useRouter();
   const { authenticated } = usePrivyAuth();
+  const { isLiveMode } = useModeStore();
+  
+  // Filter strategies based on the current mode
+  const filteredPredefinedStrategies = useMemo(() => {
+    return predefinedStrategies.filter(strategy => 
+      isLiveMode ? strategy.analysisMode === 'live' : strategy.analysisMode === 'simulation'
+    );
+  }, [isLiveMode]);
   
   // Check access permissions
   useEffect(() => {
@@ -65,7 +76,19 @@ export default function DashboardPage() {
   const [addressDetails, setAddressDetails] = useState<any | undefined>(undefined);
   
   // State for address list
-  const [addresses, setAddresses] = useState<AddressListItem[]>([]);
+  const [addressList, setAddressList] = useState<AddressListItem[]>([]);
+  
+  // Ref to track all addresses (will be updated immediately without waiting for state updates)
+  const allAddressesRef = useRef<Set<string>>(new Set());
+  
+  // Update allAddressesRef when selectedAddress changes
+  useEffect(() => {
+    if (selectedAddress) {
+      allAddressesRef.current.add(selectedAddress);
+      console.log('Added selected address to ref:', selectedAddress);
+      console.log('Current addresses in ref:', [...allAddressesRef.current]);
+    }
+  }, [selectedAddress]);
   
   // State for strategies
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -78,7 +101,11 @@ export default function DashboardPage() {
   const [isChatVisible, setIsChatVisible] = useState(true);
   
   // State for chat messages
-  const [chatMessages, setChatMessages] = useState<string[]>([]);
+  type ChatMessage = {
+    text: string;
+    sender: 'user' | 'system';
+  };
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   
   // State to trigger chat reset (using a number that increments)
   const [chatResetKey, setChatResetKey] = useState(0);
@@ -107,7 +134,7 @@ export default function DashboardPage() {
           ...item,
           type: item.type as NodeType
         }));
-        setAddresses(addressList);
+        setAddressList(addressList);
         
         // Set investigation state to ready
         setInvestigationState('ready');
@@ -118,42 +145,42 @@ export default function DashboardPage() {
       } else {
         // If no test address, show empty state with chat prompt
         setGraphData({ nodes: [], edges: [] });
-        setChatMessages(['Welcome to Freemium mode! Please enter an Ethereum address to start your investigation.']);
+        setChatMessages([{ text: 'Welcome to Freemium mode! Please enter an Ethereum address to start your investigation.', sender: 'system' }]);
         setInvestigationState('idle');
       }
     }
   }, []);
   
-  // Handle message submission from chatbox
-  const handleMessageSubmit = (message: string) => {
-    // Process the user's message
+  // Handle chat message submission
+  const handleChatMessage = (message: string) => {
+    // Add the message to chat history
+    setChatMessages(prev => [...prev, { text: message, sender: 'user' }]);
+    
+    // Check if the message is an Ethereum address
     if (message.startsWith('0x') && message.length === 42) {
-      // If it's an address, just render a single node for the main address
-      const address = message;
+      // Set investigation state to ready
+      setInvestigationState('ready');
       
-      // Use the generateSingleNodeData function for instant rendering
-      const singleNodeData = generateSingleNodeData(address);
-      
-      // Set the graph data with just the main node
-      setGraphData({ 
-        nodes: singleNodeData.nodes as Node[], 
-        edges: [] 
+      // Clear any existing graph data
+      setGraphData({
+        nodes: [],
+        edges: []
       });
       
       // Set the selected address
-      setSelectedAddress(address);
+      setSelectedAddress(message);
       
       // Generate mock address details
-      const details = generateMockAddressDetails(address, 'main');
+      const details = generateMockAddressDetails(message, 'main');
       setAddressDetails(details);
       
       // Generate address list with just the main address
       const addressList: AddressListItem[] = [{
-        address: address,
+        address: message,
         type: 'main',
         tags: []
       }];
-      setAddresses(addressList);
+      setAddressList(addressList);
       
       // Do NOT start any strategies automatically
     } else if (message.toLowerCase().includes('run strategy') || message.toLowerCase().includes('strategy')) {
@@ -163,19 +190,25 @@ export default function DashboardPage() {
         const strategyName = strategyMatch[1].trim();
         
         // Find the strategy in predefined strategies
-        const strategy = predefinedStrategies.find(s => 
+        const strategy = filteredPredefinedStrategies.find(s => 
           s.name.toLowerCase() === strategyName.toLowerCase()
         );
         
         if (strategy && selectedAddress) {
-          // Run the strategy
-          handleAddressSubmit(selectedAddress, [strategy.id]);
+          // Add the strategy to the list if it's not already there
+          handleAddStrategyToPanel(strategy);
         }
       } else {
         // If no specific strategy was mentioned, but the message mentions strategy
         if (selectedAddress) {
-          // Run a default strategy
-          handleAddressSubmit(selectedAddress, ['token_transfers']);
+          // Show strategy suggestions
+          setChatMessages(prev => [
+            ...prev, 
+            { 
+              text: "What strategy would you like to run? Choose from the suggestions.", 
+              sender: 'system' 
+            }
+          ]);
         }
       }
     } else {
@@ -185,35 +218,189 @@ export default function DashboardPage() {
     }
   };
   
-  // Handle address submission
-  const handleAddressSubmit = (address: string, strategyIds: string[]) => {
+  // Function to add a strategy to the panel
+  const handleAddStrategyToPanel = (predefinedStrategy: PredefinedStrategy) => {
+    console.log('Adding strategy to panel:', predefinedStrategy.name);
+    
+    // Generate a unique ID for this instance of the strategy
+    // This allows adding the same strategy type multiple times
+    const uniqueId = `${predefinedStrategy.id}_${Date.now()}`;
+    
+    // Create a new strategy object with the unique ID
+    const newStrategy: Strategy = {
+      id: uniqueId,
+      baseId: predefinedStrategy.id, // Store the original ID for API mapping
+      name: predefinedStrategy.name,
+      description: predefinedStrategy.description,
+      status: 'queued',
+      progress: 0
+    };
+    
+    // Add the strategy to the list
+    setStrategies(prev => [...prev, newStrategy]);
+    
+    // Remove automatic strategy start to ensure strategies don't run automatically
+    // when selected, as per user preference
+  };
+
+  // Function to handle address submission
+  const handleAddressSubmit = (address: string) => {
     if (!address) return;
+    
+    // Reset chat messages
+    setChatMessages([]);
+    
+    // Reset investigation state
+    setInvestigationState('idle');
+    
+    // Generate a single node for the submitted address
+    const initialNodeData = generateSingleNodeData(address);
+    // Type cast to ensure compatibility with the Node type
+    setGraphData({
+      nodes: initialNodeData.nodes.map(node => ({
+        ...node,
+        type: node.type as NodeType
+      })),
+      edges: initialNodeData.edges
+    });
     
     // Set the selected address
     setSelectedAddress(address);
     
-    // Create strategy objects for each selected strategy
-    const newStrategies = strategyIds.map(id => {
-      const predefinedStrategy = predefinedStrategies.find(s => s.id === id);
-      return {
-        id: `${id}-${Date.now()}`,
-        name: predefinedStrategy?.name || id,
-        description: predefinedStrategy?.description || '',
-        status: 'idle' as const,
-        progress: 0,
-        startedAt: undefined,
-        completedAt: undefined,
-        discoveredAddresses: 0
-      };
-    });
+    // Add to address list
+    const newAddressList = [
+      {
+        address: address,
+        type: 'main' as NodeType,
+        tags: ['Main Address']
+      },
+      ...addressList.filter(item => item.address !== address)
+    ];
+    setAddressList(newAddressList);
     
-    // Add strategies to the queue
-    setStrategies(prev => [...prev, ...newStrategies]);
+    // Generate mock strategies
+    const newStrategies = generateMockStrategies(['token_transfers', 'bidirectional']);
+    setStrategies(newStrategies);
     
-    // Set investigation as active
+    // Update investigation state
     setInvestigationState('ready');
+    
+    // Do NOT automatically run strategies in Live Mode
   };
-  
+
+  // Function to handle Live Mode strategy execution
+  const handleLiveStrategy = useCallback(async (address: string) => {
+    if (!isLiveMode || !address) return;
+
+    try {
+      const response = await runStrategy([address], 'bidirectional_transfers');
+      
+      if (response.status === 'success') {
+        const existingNodes = graphData.nodes;
+        const { newNodes, newEdges } = processStrategyResponse(response, existingNodes);
+        
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          setGraphData(prev => {
+            // Filter out any duplicate nodes
+            const existingNodeIds = new Set(prev.nodes.map(node => node.id));
+            const filteredNewNodes = newNodes.filter(node => !existingNodeIds.has(node.id));
+            
+            // Filter out any duplicate edges
+            const existingEdgeIds = new Set(prev.edges.map(edge => edge.id));
+            const filteredNewEdges = newEdges.filter(edge => !existingEdgeIds.has(edge.id));
+            
+            return {
+              nodes: [...prev.nodes, ...filteredNewNodes],
+              edges: [...prev.edges, ...filteredNewEdges]
+            };
+          });
+          
+          // Update address list with new nodes
+          const newAddressItems = newNodes.map(node => ({
+            address: node.id,
+            type: node.type,
+            tags: ['Related Address']
+          }));
+          
+          if (newAddressItems.length > 0) {
+            // Update the ref immediately with new addresses
+            newAddressItems.forEach(item => {
+              allAddressesRef.current.add(item.address);
+            });
+            console.log('Added new addresses to ref:', newAddressItems.map(item => item.address));
+            console.log('Current addresses in ref:', [...allAddressesRef.current]);
+            
+            // Also update the state (which will be used for UI rendering)
+            setAddressList(prev => [
+              ...prev,
+              ...newAddressItems.filter(item => !prev.some(existing => existing.address === item.address))
+            ]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Live mode strategy error:', error);
+    }
+  }, [addressList, runStrategy]);
+
+  // Function to run strategy with all addresses
+  const handleRunAllAddressesStrategy = async () => {
+    if (!isLiveMode || graphData.nodes.length === 0) return;
+    
+    const allAddresses = graphData.nodes.map(node => node.id);
+    
+    try {
+      //debugger;
+      const response = await runStrategy(allAddresses, 'bidirectional_transfers');
+      
+      if (response.status === 'success') {
+        const existingNodes = graphData.nodes;
+        const { newNodes, newEdges } = processStrategyResponse(response, existingNodes);
+        
+        if (newNodes.length > 0 || newEdges.length > 0) {
+          setGraphData(prev => {
+            // Filter out any duplicate nodes
+            const existingNodeIds = new Set(prev.nodes.map(node => node.id));
+            const filteredNewNodes = newNodes.filter(node => !existingNodeIds.has(node.id));
+            
+            // Filter out any duplicate edges
+            const existingEdgeIds = new Set(prev.edges.map(edge => edge.id));
+            const filteredNewEdges = newEdges.filter(edge => !existingEdgeIds.has(edge.id));
+            
+            return {
+              nodes: [...prev.nodes, ...filteredNewNodes],
+              edges: [...prev.edges, ...filteredNewEdges]
+            };
+          });
+          
+          // Update address list with new nodes
+          const newAddressItems = newNodes.map(node => ({
+            address: node.id,
+            type: node.type,
+            tags: ['Related Address']
+          }));
+          
+          if (newAddressItems.length > 0) {
+            // Update the ref immediately with new addresses
+            newAddressItems.forEach(item => {
+              allAddressesRef.current.add(item.address);
+            });
+            console.log('Added new addresses to ref:', newAddressItems.map(item => item.address));
+            console.log('Current addresses in ref:', [...allAddressesRef.current]);
+            
+            // Also update the state (which will be used for UI rendering)
+            setAddressList(prev => [
+              ...prev,
+              ...newAddressItems.filter(item => !prev.some(existing => existing.address === item.address))
+            ]);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Live mode all addresses strategy error:', error);
+    }
+  };
+
   // Handle node selection in graph
   const handleNodeSelect = (nodeId: string) => {
     setSelectedAddress(nodeId);
@@ -274,10 +461,200 @@ export default function DashboardPage() {
       })
     );
     
-    // Simulate strategy execution
-    simulateStrategyExecution(id);
+    // Get the strategy details
+    const strategy = strategies.find(s => s.id === id);
+    if (!strategy) return;
+    
+    // Set investigation state to active
+    setInvestigationState('active');
+    
+    if (isLiveMode) {
+      // In Live Mode, make API calls instead of simulating
+      executeLiveStrategy(id);
+    } else {
+      // In Simulation Mode, simulate strategy execution
+      simulateStrategyExecution(id);
+    }
   };
   
+  // Execute a live strategy with API calls
+  const executeLiveStrategy = useCallback(async (strategyId: string) => {
+    // Get the strategy details
+    const strategy = strategies.find(s => s.id === strategyId);
+    if (!strategy || !selectedAddress) {
+      console.error('Cannot execute strategy: strategy not found or no address selected', { strategyId, selectedAddress });
+      return;
+    }
+    
+    // Check if this strategy is already running to prevent duplicate calls
+    if (strategy.status === 'running' && strategy.progress && strategy.progress > 0) {
+      console.warn('Strategy is already running, preventing duplicate execution:', strategyId);
+      return;
+    }
+    
+    console.log('Executing Live Strategy:', strategy.name, 'ID:', strategyId);
+    console.log('Current investigation state:', investigationState);
+    console.log('Is Live Mode active:', isLiveMode);
+    
+    // Map strategy ID to API analysis type
+    let analysisType: AnalysisMode;
+    
+    // Map strategy ID to the correct API analysis type
+    switch (strategy.baseId) {
+      case 'bidirectional_transfers':
+        analysisType = 'bidirectional_transfers';
+        break;
+      case 'funding_address':
+        analysisType = 'funding_address';
+        break;
+      default:
+        // For any other strategy, default to bidirectional_transfers
+        analysisType = 'bidirectional_transfers';
+        console.log('Using default analysis type for strategy:', strategy.baseId);
+    }
+    
+    console.log('Using analysis type:', analysisType);
+    
+    // Set up progress updates
+    const totalUpdates = 10;
+    let currentUpdate = 0;
+    let apiCallMade = false; // Flag to track if API call has been made
+    
+    // Reset progress to 0 at the start
+    setStrategies(prev => 
+      prev.map(s => {
+        if (s.id === strategyId) {
+          return { ...s, progress: 0 };
+        }
+        return s;
+      })
+    );
+    
+    // Start progress updates
+    const progressInterval = setInterval(() => {
+      currentUpdate++;
+      const progress = (currentUpdate / totalUpdates) * 100;
+      
+      console.log(`Strategy progress update: ${progress}%`);
+      
+      // Update strategy progress
+      setStrategies(prev => 
+        prev.map(s => {
+          if (s.id === strategyId) {
+            const currentProgress = s.progress || 0;
+            return { ...s, progress: Math.max(currentProgress, Math.min(progress, 50)) }; // Only go to 50% before API call
+          }
+          return s;
+        })
+      );
+      
+      // If we've reached 50% and haven't made the API call yet, make it
+      if (currentUpdate >= totalUpdates / 2 && progress >= 50 && !apiCallMade) {
+        apiCallMade = true; // Set flag to prevent duplicate calls
+        clearInterval(progressInterval);
+        console.log('Reached 50% progress, preparing to make API call');
+        
+        // Make the API call
+        (async () => {
+          try {
+            // Always include all addresses from our ref
+            // This ensures we have the most up-to-date list of addresses
+            // including those found by previous strategies
+            const addresses = [...allAddressesRef.current];
+            
+            console.log('Making API call with addresses from ref:', addresses.length);
+            console.log('Addresses being used:', addresses);
+            
+            const response = await runStrategy(addresses, analysisType);
+            
+            console.log('API response:', response);
+            
+            if (response.status === 'success') {
+              const existingNodes = graphData.nodes;
+              const { newNodes, newEdges } = processStrategyResponse(response, existingNodes);
+              
+              console.log('Processed API response:', { newNodesCount: newNodes.length, newEdgesCount: newEdges.length });
+              
+              if (newNodes.length > 0 || newEdges.length > 0) {
+                setGraphData(prev => {
+                  // Filter out any duplicate nodes
+                  const existingNodeIds = new Set(prev.nodes.map(node => node.id));
+                  const filteredNewNodes = newNodes.filter(node => !existingNodeIds.has(node.id));
+                  
+                  // Filter out any duplicate edges
+                  const existingEdgeIds = new Set(prev.edges.map(edge => edge.id));
+                  const filteredNewEdges = newEdges.filter(edge => !existingEdgeIds.has(edge.id));
+                  
+                  return {
+                    nodes: [...prev.nodes, ...filteredNewNodes],
+                    edges: [...prev.edges, ...filteredNewEdges]
+                  };
+                });
+                
+                // Update address list with new nodes
+                const newAddressItems = newNodes.map(node => ({
+                  address: node.id,
+                  type: node.type,
+                  tags: ['Related Address']
+                }));
+                
+                if (newAddressItems.length > 0) {
+                  // Update the ref immediately with new addresses
+                  newAddressItems.forEach(item => {
+                    allAddressesRef.current.add(item.address);
+                  });
+                  console.log('Added new addresses to ref:', newAddressItems.map(item => item.address));
+                  console.log('Current addresses in ref:', [...allAddressesRef.current]);
+                  
+                  // Also update the state (which will be used for UI rendering)
+                  setAddressList(prev => [
+                    ...prev,
+                    ...newAddressItems.filter(item => !prev.some(existing => existing.address === item.address))
+                  ]);
+                }
+              } else {
+                console.log('No new nodes or edges found in API response');
+              }
+            } else {
+              console.error('API response indicates failure:', response);
+            }
+            
+            // Complete the progress to 100%
+            setStrategies(prev => 
+              prev.map(s => {
+                if (s.id === strategyId) {
+                  return { ...s, progress: 100 };
+                }
+                return s;
+              })
+            );
+            
+            // Mark strategy as completed
+            setTimeout(() => {
+              handleStrategyComplete(strategyId);
+            }, 500);
+            
+          } catch (error) {
+            console.error('Live strategy execution error:', error);
+            
+            // Mark strategy as failed
+            setStrategies(prev => 
+              prev.map(s => {
+                if (s.id === strategyId) {
+                  return { ...s, status: 'failed' as const };
+                }
+                return s;
+              })
+            );
+            
+            // Start the next strategy if there is one
+            startNextStrategy();
+          }
+        })();
+      }
+    }, 200);
+  }, [strategies, selectedAddress, runStrategy]);
+
   // Simulate strategy execution with random duration and node generation
   const simulateStrategyExecution = (strategyId: string) => {
     // Get a random duration between 1-5 seconds
@@ -439,7 +816,7 @@ export default function DashboardPage() {
         tags: [strategy.name]
       };
       
-      setAddresses(prev => [...prev, newAddressItem]);
+      setAddressList(prev => [...prev, newAddressItem]);
     }
     
     // Update graph with new nodes and edges - ensure we're not losing any existing nodes
@@ -599,7 +976,7 @@ export default function DashboardPage() {
         type: 'main',
         tags: []
       };
-      setAddresses([mainAddressItem]);
+      setAddressList([mainAddressItem]);
     }
     
     // Only start the first strategy, queue the rest
@@ -719,7 +1096,7 @@ export default function DashboardPage() {
     setGraphData({ nodes: [], edges: [] });
     
     // Reset addresses list
-    setAddresses([]);
+    setAddressList([]);
     
     // Reset address details
     setAddressDetails(undefined);
@@ -830,9 +1207,9 @@ export default function DashboardPage() {
           {/* Floating Chat Box */}
           <div className={`absolute bottom-4 right-4 w-[90%] md:w-[60%] lg:w-[40rem] ${isChatVisible ? 'block' : 'hidden'}`}>
             <ChatBox 
-              onMessageSubmit={handleMessageSubmit}
+              onMessageSubmit={handleChatMessage}
               onClose={() => setIsChatVisible(false)}
-              predefinedStrategies={predefinedStrategies}
+              predefinedStrategies={filteredPredefinedStrategies}
               resetKey={chatResetKey}
             />
           </div>
@@ -865,7 +1242,7 @@ export default function DashboardPage() {
           <div className="h-1/2 p-2 md:p-4 overflow-y-auto">
             <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Addresses</h2>
             <AddressList 
-              addresses={addresses}
+              addresses={addressList}
               selectedAddress={selectedAddress}
               onAddressSelect={handleNodeSelect}
             />

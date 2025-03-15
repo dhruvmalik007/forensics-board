@@ -39,9 +39,9 @@ export function AddressList({ addresses, selectedAddress, onAddressSelect }: Add
 
   return (
     <div className="space-y-1 overflow-y-auto">
-      {addresses.map((addr) => (
+      {addresses.map((addr, index) => (
         <Button
-          key={addr.address}
+          key={`${addr.address}-${index}`}
           variant="ghost"
           className={`w-full justify-start px-2 py-1 h-auto text-sm ${
             selectedAddress === addr.address ? 'bg-gray-700' : ''

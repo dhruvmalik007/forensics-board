@@ -10,6 +10,7 @@ export type PredefinedStrategy = {
   id: string;
   name: string;
   description: string;
+  analysisMode: 'simulation' | 'live';
 };
 
 type Message = {

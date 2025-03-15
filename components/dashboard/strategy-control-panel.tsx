@@ -5,6 +5,7 @@ import { Play, Pause, X, MoveUp, MoveDown } from 'lucide-react';
 
 export type Strategy = {
   id: string;
+  baseId?: string; // Original strategy ID for API mapping
   name: string;
   description: string;
   status: 'idle' | 'queued' | 'running' | 'paused' | 'completed' | 'failed';

@@ -406,7 +406,7 @@ export function GraphVisualization({ nodes, edges, onNodeSelect, selectedNode }:
       >
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Draw edges */}
-          {edges.map(edge => {
+          {edges.map((edge, index) => {
             const source = positionedNodes.find(n => n.id === edge.source);
             const target = positionedNodes.find(n => n.id === edge.target);
 
@@ -433,7 +433,7 @@ export function GraphVisualization({ nodes, edges, onNodeSelect, selectedNode }:
             const arrowY = source.y + dy * ratio;
 
             return (
-              <g key={edge.id}>
+              <g key={`edge-${edge.id}-${index}`}>
                 {/* Main edge line */}
                 <line
                   x1={source.x}
@@ -455,7 +455,7 @@ export function GraphVisualization({ nodes, edges, onNodeSelect, selectedNode }:
           })}
 
           {/* Draw nodes */}
-          {positionedNodes.map(node => {
+          {positionedNodes.map((node, index) => {
             if (node.x === undefined || node.y === undefined) return null;
 
             const isSelected = node.id === selectedNode;
@@ -464,7 +464,7 @@ export function GraphVisualization({ nodes, edges, onNodeSelect, selectedNode }:
 
             return (
               <g 
-                key={node.id} 
+                key={`node-${node.id}-${index}`} 
                 transform={`translate(${node.x}, ${node.y})`}
                 onClick={(e) => {
                   e.stopPropagation();

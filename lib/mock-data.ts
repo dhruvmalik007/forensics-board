@@ -12,38 +12,39 @@ export const predefinedStrategies: PredefinedStrategy[] = [
   {
     id: 'token_transfers',
     name: 'Token Transfers',
-    description: 'Identifies related wallets through token transactions across chains'
+    description: 'Identifies related wallets through token transactions across chains',
+    analysisMode: 'simulation'
   },
   {
     id: 'nft_transfers',
     name: 'NFT Transfers',
-    description: 'Tracks non-fungible token movements between addresses'
+    description: 'Tracks non-fungible token movements between addresses',
+    analysisMode: 'simulation'
   },
   {
-    id: 'bidirectional',
+    id: 'bidirectional_transfers',
     name: 'Bidirectional Transfers',
-    description: 'Analyzes wallets interacting in both directions'
+    description: 'Analyzes wallets interacting in both directions with the target address',
+    analysisMode: 'live'
   },
   {
-    id: 'funding',
-    name: 'Funding Analysis',
-    description: 'Traces wallets funding a specific wallet'
+    id: 'funding_address',
+    name: 'Funding Address Analysis',
+    description: 'Traces wallets that have funded the target address',
+    analysisMode: 'live'
   },
   {
     id: 'bridging',
     name: 'Bridging Transfers',
-    description: 'Tracks cross-chain transfers'
+    description: 'Tracks cross-chain transfers',
+    analysisMode: 'simulation'
   },
   {
     id: 'lp_analysis',
     name: 'LP Position Transfer Analysis',
-    description: 'Identifies side wallets connected to the liquidity pool position'
+    description: 'Identifies side wallets connected to the liquidity pool position',
+    analysisMode: 'simulation'
   },
-  {
-    id: 'multisig',
-    name: 'Multisig Analysis',
-    description: 'Extends analysis to multisig wallets and their signers'
-  }
 ];
 
 // Mock nodes and edges for graph visualization

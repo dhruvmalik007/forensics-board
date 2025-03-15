@@ -22,12 +22,16 @@ export const dynamic = 'force-dynamic';
  * 2. Return results based on the analysis type
  */
 export async function POST(request: NextRequest) {
+  console.log('API route handler called: /api/run-strategy');
+  
   try {
     // Parse the JSON request body
     const payload = await request.json() as RunStrategyRequestPayload;
+    console.log('Received payload:', payload);
     
     // Validate required fields
     if (!payload.addresses || !Array.isArray(payload.addresses) || payload.addresses.length === 0) {
+      console.error('Missing or invalid field: addresses must be a non-empty array');
       return NextResponse.json(
         { error: 'Missing or invalid field: addresses must be a non-empty array' },
         { status: 400 }
@@ -35,6 +39,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (!payload.analysis_type) {
+      console.error('Missing required field: analysis_type');
       return NextResponse.json(
         { error: 'Missing required field: analysis_type' },
         { status: 400 }
@@ -42,9 +47,14 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if we can handle this analysis type
-    if (canHandleAnalysisType(payload.analysis_type)) {
+    const canHandle = canHandleAnalysisType(payload.analysis_type);
+    console.log(`Can handle analysis type '${payload.analysis_type}': ${canHandle}`);
+    
+    if (canHandle) {
       // Execute the Dune-based strategy
+      console.log('Executing Dune strategy...');
       const relationships = await executeDuneStrategy(payload);
+      console.log(`Strategy execution complete. Found ${relationships.length} relationships.`);
       
       return NextResponse.json({
         status: 'success',
@@ -53,16 +63,17 @@ export async function POST(request: NextRequest) {
     }
     
     // For analysis types we don't handle yet
+    console.error(`Unsupported analysis type: ${payload.analysis_type}`);
     return NextResponse.json({
       status: 'error',
       message: `Unsupported analysis type: ${payload.analysis_type}`,
-      supportedTypes: ['bidirectional_transfers', 'founding_address']
+      supportedTypes: ['bidirectional_transfers', 'funding_address']
     }, { status: 400 });
     
   } catch (error) {
     console.error('Error processing strategy request:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

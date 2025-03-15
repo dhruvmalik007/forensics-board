@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePrivyAuthWithDB } from '@/hooks/use-privy-auth-with-db';
+import { Switch } from '@/components/ui/switch';
+import { useModeStore } from '@/lib/stores/mode-store';
 
 export default function DashboardLayout({
   children,
@@ -11,6 +13,7 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = usePrivyAuthWithDB();
   const [isFreemium, setIsFreemium] = useState(false);
+  const { isLiveMode, toggleMode } = useModeStore();
   
   useEffect(() => {
     // Check if in freemium mode
@@ -42,7 +45,18 @@ export default function DashboardLayout({
           </svg>
           <h1 className="text-xl font-bold">Blockchain Forensics</h1>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-4">
+          {/* Live Mode Toggle */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-300">Simulation</span>
+            <Switch 
+              checked={isLiveMode} 
+              onCheckedChange={toggleMode}
+              aria-label="Toggle live mode"
+            />
+            <span className="text-sm text-gray-300">Live Mode</span>
+          </div>
+          
           {isFreemium && (
             <div className="px-3 py-2 text-xs text-amber-400 bg-amber-500/10 rounded-md">
               Freemium Mode
