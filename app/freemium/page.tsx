@@ -10,8 +10,10 @@ export default function FreemiumPage() {
       // Set freemium flag in localStorage
       localStorage.setItem('freemiumEnabled', 'true');
       
-      // Clear any existing test address to ensure fresh start
-      localStorage.removeItem('testAddress');
+      // Set a default test address if one isn't already set
+      if (!localStorage.getItem('testAddress')) {
+        localStorage.setItem('testAddress', '0x71C7656EC7ab88b098defB751B7401B5f6d8976F');
+      }
       
       // Redirect to dashboard with relative path
       window.location.href = '/dashboard';

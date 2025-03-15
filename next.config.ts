@@ -1,8 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
+  reactStrictMode: false,
   experimental: {
     ppr: true,
   },
@@ -13,7 +12,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Configure headers to allow Coinbase Wallet SDK
+  // Configure headers to allow Coinbase Wallet SDK and ensure proper navigation
   async headers() {
     return [
       {
@@ -27,6 +26,11 @@ const nextConfig: NextConfig = {
             key: 'Cross-Origin-Embedder-Policy',
             value: 'require-corp',
           },
+          // Add cache control to prevent caching issues
+          {
+            key: 'Cache-Control',
+            value: 'no-store, max-age=0',
+          },
         ],
       },
     ];
@@ -37,6 +41,17 @@ const nextConfig: NextConfig = {
       {
         source: '/coinbase-callback',
         destination: '/api/auth/callback/coinbase',
+      },
+    ];
+  },
+  // Add redirects to ensure navigation works correctly
+  async redirects() {
+    return [
+      // Add a catch-all redirect rule with lower priority
+      {
+        source: '/freemium',
+        destination: '/dashboard',
+        permanent: false,
       },
     ];
   },

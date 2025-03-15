@@ -16,8 +16,20 @@ import {
   NodeType,
   generateRelevantAddressDetails
 } from '../../lib/mock-data';
+import { Sidebar } from '@/components/dashboard/spinner';
 import { useRouter } from 'next/navigation'
 import { usePrivyAuth } from '@/hooks/use-privy-auth';
+import { FeatureVisualization } from '@/components/dashboard/feature-visualization';
+import { TokenHolderAnalysis } from '@/components/dashboard/token-holder-analysis';
+import { ConnectionExplorer } from '@/components/dashboard/connection-explorer';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { InvestigationInput } from '@/components/dashboard/investigation-input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { CheckIcon } from '@radix-ui/react-icons';
+import { AgentChatBox } from '@/components/dashboard/agent-chat-box';
+import { ethers } from 'ethers';
 
 // Import the Node and Edge types from the graph visualization component
 type Node = {
@@ -83,6 +95,22 @@ export default function DashboardPage() {
   // State to trigger chat reset (using a number that increments)
   const [chatResetKey, setChatResetKey] = useState(0);
   
+  // State for loading
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Add a state for the active feature tab
+  const [activeFeatureTab, setActiveFeatureTab] = useState<string>('graph');
+  
+  // State for showing the investigation input dialog
+  const [showInvestigationInput, setShowInvestigationInput] = useState(false);
+  
+  // State for showing the investigation dialog
+  const [showInvestigationDialog, setShowInvestigationDialog] = useState(false);
+  
+  // Add state for selected node and user address
+  const [selectedNode, setSelectedNode] = useState<{ id: string; label: string; type: string } | null>(null);
+  const [userAddress, setUserAddress] = useState<string | undefined>(undefined);
+  
   // Initialize with test data if in freemium mode
   useEffect(() => {
     const isFreemium = localStorage.getItem('freemiumEnabled') === 'true';
@@ -109,38 +137,178 @@ export default function DashboardPage() {
   }, []);
   
   // Handle message submission from chatbox
-  const handleMessageSubmit = (message: string) => {
-    // Process the user's message
-    if (message.startsWith('0x') && message.length === 42) {
-      // If it's an address, just render a single node for the main address
-      const address = message;
+  const handleMessageSubmit = async (message: string) => {
+    // Check if the message is an Ethereum address
+    const isEthereumAddress = /^0x[a-fA-F0-9]{40}$/.test(message);
+    
+    if (isEthereumAddress) {
+      // Set loading state
+      setIsLoading(true);
       
-      // Use the generateSingleNodeData function for instant rendering
-      const singleNodeData = generateSingleNodeData(address);
-      
-      // Set the graph data with just the main node
-      setGraphData({ 
-        nodes: singleNodeData.nodes as Node[], 
-        edges: [] 
-      });
-      
-      // Set the selected address
-      setSelectedAddress(address);
-      
-      // Generate mock address details
-      const details = generateMockAddressDetails(address, 'main');
-      setAddressDetails(details);
-      
-      // Generate address list with just the main address
-      const addressList: AddressListItem[] = [{
-        address: address,
-        type: 'main',
-        tags: []
-      }];
-      setAddresses(addressList);
-      
-      // Do NOT start any strategies automatically
-    } else if (message.toLowerCase().includes('run strategy') || message.toLowerCase().includes('strategy')) {
+      try {
+        // Call the API to get transaction data with categorization
+        const response = await fetch(`/api/blockchain/search?address=${message}&categorize=true`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          // Generate graph data from transactions
+          const { nodes, edges } = generateMockGraphData(message);
+          
+          // Update graph with real transaction data
+          if (data.data.transactions && data.data.transactions.length > 0) {
+            // Use the categorized addresses if available
+            if (data.data.addressInfo && data.data.relatedAddresses) {
+              // Create nodes from the main address and related addresses with their categories
+              const categorizedNodes = [
+                {
+                  id: data.data.addressInfo.address,
+                  label: data.data.addressInfo.address.substring(0, 8),
+                  type: data.data.addressInfo.category || 'main'
+                },
+                ...data.data.relatedAddresses.map((addr: any) => ({
+                  id: addr.address,
+                  label: addr.address.substring(0, 8),
+                  type: addr.category || 'unknown'
+                }))
+              ];
+              
+              // Create edges from transactions
+              const categorizedEdges = data.data.transactions.map((tx: any, index: number) => ({
+                id: `e${index}`,
+                source: tx.from || message,
+                target: tx.to || 'Unknown',
+                type: 'token_transfer'
+              }));
+              
+              setGraphData({ 
+                nodes: categorizedNodes as Node[], 
+                edges: categorizedEdges as Edge[] 
+              });
+              
+              // Create address list with categories
+              const addressList: AddressListItem[] = [
+                {
+                  address: data.data.addressInfo.address,
+                  type: data.data.addressInfo.category || 'main',
+                  tags: data.data.addressInfo.tags || []
+                },
+                ...data.data.relatedAddresses.map((addr: any) => ({
+                  address: addr.address,
+                  type: addr.category || 'unknown',
+                  tags: addr.tags || []
+                }))
+              ];
+              
+              setAddresses(addressList);
+            } else {
+              // Fall back to basic graph generation if no categorization
+              const txNodes = [
+                { id: message, label: message.substring(0, 8), type: 'main' as NodeType }
+              ];
+              
+              // Add unique addresses from transactions
+              const uniqueAddresses = new Set<string>();
+              data.data.transactions.forEach((tx: any) => {
+                if (tx.from && tx.from !== message) uniqueAddresses.add(tx.from);
+                if (tx.to && tx.to !== message) uniqueAddresses.add(tx.to);
+              });
+              
+              // Add nodes for unique addresses
+              Array.from(uniqueAddresses).forEach(addr => {
+                txNodes.push({
+                  id: addr,
+                  label: addr.substring(0, 8),
+                  type: 'alt_wallet' as NodeType
+                });
+              });
+              
+              // Create edges from transactions
+              const txEdges = data.data.transactions.map((tx: any, index: number) => ({
+                id: `e${index}`,
+                source: tx.from || message,
+                target: tx.to || 'Unknown',
+                type: 'token_transfer' as const
+              }));
+              
+              setGraphData({ 
+                nodes: txNodes as Node[], 
+                edges: txEdges as Edge[] 
+              });
+              
+              // Create address list
+              const addressList: AddressListItem[] = txNodes.map(node => ({
+                address: node.id,
+                type: node.type,
+                tags: []
+              }));
+              
+              setAddresses(addressList);
+            }
+            
+            // Create mock address details using real transaction data
+            const txDetails = {
+              address: message,
+              type: data.data.addressInfo?.category || 'main',
+              tags: data.data.addressInfo?.tags?.map((tag: string) => ({ name: tag, source: 'api' })) || 
+                    [{ name: 'User Input', source: 'custom' }],
+              transactions: data.data.transactions.map((tx: any) => ({
+                id: `tx-${tx.hash.substring(0, 8)}`,
+                hash: tx.hash,
+                timestamp: new Date(tx.timestamp),
+                from: tx.from || message,
+                to: tx.to || 'Unknown',
+                value: tx.value || '0',
+                asset: tx.type || 'ETH',
+                direction: tx.from === message ? 'outgoing' : 'incoming'
+              })),
+              balance: []
+            };
+            
+            setAddressDetails(txDetails);
+          } else {
+            // If no transactions found, fall back to mock data
+            const singleNodeData = generateSingleNodeData(message);
+            setGraphData({ 
+              nodes: singleNodeData.nodes as Node[], 
+              edges: [] 
+            });
+            
+            // Generate mock address details
+            const details = generateMockAddressDetails(message, 'main');
+            setAddressDetails(details);
+            
+            // Generate address list with just the main address
+            const addressList: AddressListItem[] = [{
+              address: message,
+              type: 'main',
+              tags: []
+            }];
+            setAddresses(addressList);
+          }
+          
+          // Set the selected address
+          setSelectedAddress(message);
+          
+          // Set investigation state to ready
+          setInvestigationState('ready');
+          
+          // Add strategies
+          setStrategies(generateMockStrategies());
+          
+          // Add a message to the chat
+          setChatMessages(prev => [...prev, `Found data for address ${message}. You can now start the investigation.`]);
+        } else {
+          // Handle error
+          setChatMessages(prev => [...prev, `Error: Could not find data for address ${message}. Please try again.`]);
+        }
+      } catch (error) {
+        console.error('Error fetching transaction data:', error);
+        setChatMessages(prev => [...prev, 'Error fetching transaction data. Please try again.']);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Handle non-address messages
       // If the message mentions running a strategy, extract the strategy name
       const strategyMatch = message.match(/run strategy:?\s*([^.]+)/i);
       if (strategyMatch && strategyMatch[1]) {
@@ -162,10 +330,6 @@ export default function DashboardPage() {
           handleAddressSubmit(selectedAddress, ['token_transfers']);
         }
       }
-    } else {
-      // For other types of messages, just log them for now
-      console.log(`Received message: ${message}`);
-      // In a real app, you would process the message and update the UI accordingly
     }
   };
   
@@ -196,41 +360,232 @@ export default function DashboardPage() {
     
     // Set investigation as active
     setInvestigationState('ready');
+    
+    // For each strategy, call the API with appropriate parameters
+    const strategyPromises = strategyIds.map(strategyId => {
+      const predefinedStrategy = predefinedStrategies.find(s => s.id === strategyId);
+      if (!predefinedStrategy) return Promise.resolve(null);
+      
+      // Different API calls for different strategy types
+      if (strategyId === 'token_transfers') {
+        return fetch('/api/blockchain/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            address,
+            chain: 'ethereum', // Default to ethereum for now
+            detailed: false
+          })
+        }).then(response => response.json());
+      } else if (strategyId === 'bidirectional') {
+        return fetch('/api/blockchain/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            address,
+            chain: 'ethereum',
+            detailed: true // Get detailed info for bidirectional analysis
+          })
+        }).then(response => response.json());
+      } else if (strategyId === 'bridging') {
+        return fetch('/api/blockchain/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            address,
+            chain: 'polygon', // Check a different chain
+            detailed: false
+          })
+        }).then(response => response.json());
+      } else {
+        // For other strategies, use mock data for now
+        return Promise.resolve({ success: true, data: null });
+      }
+    });
+    
+    // Process all strategy results
+    Promise.all(strategyPromises)
+      .then(results => {
+        // Process each strategy result
+        results.forEach((result, index) => {
+          if (!result?.success || !result?.data) return;
+          
+          const strategyId = newStrategies[index].id;
+          
+          // If we got real transaction data
+          if (result.data.transactions?.length > 0) {
+            processRealTransactionData(result.data, strategyId, address);
+          } else {
+            // Fall back to mock data if no real data
+            generateRandomNodesForStrategy(strategyId);
+          }
+        });
+      })
+      .catch(error => {
+        console.error('Error executing strategies:', error);
+        // Fall back to mock data on error
+        newStrategies.forEach(strategy => {
+          generateRandomNodesForStrategy(strategy.id);
+        });
+      });
+  };
+  
+  // Process real transaction data from the API
+  const processRealTransactionData = (data: any, strategyId: string, mainAddress: string) => {
+    // Set the strategy as running
+    setStrategies(prev => 
+      prev.map(s => {
+        if (s.id === strategyId) {
+          return { 
+            ...s, 
+            status: 'running',
+            startedAt: new Date(),
+            progress: 25
+          };
+        }
+        return s;
+      })
+    );
+    
+    // Extract unique addresses from transactions
+    const transactions = data.transactions || [];
+    const uniqueAddresses = new Set<string>();
+    
+    transactions.forEach((tx: any) => {
+      if (tx.from && tx.from !== mainAddress) uniqueAddresses.add(tx.from);
+      if (tx.to && tx.to !== mainAddress) uniqueAddresses.add(tx.to);
+    });
+    
+    // Create nodes for each unique address
+    const newNodes: Node[] = [];
+    const newEdges: Edge[] = [];
+    
+    uniqueAddresses.forEach((address, index) => {
+      // Determine node type based on address characteristics
+      let nodeType: NodeType = 'alt_wallet';
+      
+      if (address.startsWith('0x0')) {
+        nodeType = 'contract';
+      } else if (transactions.filter((tx: any) => 
+        (tx.from === address && tx.to === mainAddress) || 
+        (tx.from === mainAddress && tx.to === address)
+      ).length > 3) {
+        // If there are multiple transactions with this address, mark as alt_wallet
+        nodeType = 'alt_wallet';
+      } else if (transactions.some((tx: any) => tx.value && parseFloat(tx.value) > 10)) {
+        // If there are high value transactions, mark as potentially important
+        nodeType = Math.random() > 0.7 ? 'flagged' : 'alt_wallet';
+      }
+      
+      // Create the node
+      newNodes.push({
+        id: address,
+        label: address.substring(0, 6) + '...' + address.substring(address.length - 4),
+        type: nodeType
+      });
+      
+      // Create edges based on transaction direction
+      const fromTransactions = transactions.filter((tx: any) => tx.from === address && tx.to === mainAddress);
+      if (fromTransactions.length > 0) {
+        newEdges.push({
+          id: `e-${strategyId}-from-${index}`,
+          source: address,
+          target: mainAddress,
+          type: 'token_transfer'
+        });
+      }
+      
+      const toTransactions = transactions.filter((tx: any) => tx.from === mainAddress && tx.to === address);
+      if (toTransactions.length > 0) {
+        newEdges.push({
+          id: `e-${strategyId}-to-${index}`,
+          source: mainAddress,
+          target: address,
+          type: 'token_transfer'
+        });
+      }
+    });
+    
+    // Update graph with new nodes and edges - ensure we're not losing any existing nodes
+    setGraphData(prevGraphData => {
+      // Filter out duplicates
+      const existingNodeIds = new Set(prevGraphData.nodes.map(n => n.id));
+      const nodesToAdd = newNodes.filter(n => !existingNodeIds.has(n.id));
+      
+      const existingEdgeIds = new Set(prevGraphData.edges.map(e => e.id));
+      const edgesToAdd = newEdges.filter(e => !existingEdgeIds.has(e.id));
+      
+      return {
+        nodes: [...prevGraphData.nodes, ...nodesToAdd],
+        edges: [...prevGraphData.edges, ...edgesToAdd]
+      };
+    });
+    
+    // Add to address list
+    const newAddressItems: AddressListItem[] = newNodes.map(node => ({
+      address: node.id,
+      type: node.type,
+      tags: []
+    }));
+    
+    setAddresses(prev => {
+      const existingAddresses = new Set(prev.map(a => a.address));
+      return [
+        ...prev,
+        ...newAddressItems.filter(a => !existingAddresses.has(a.address))
+      ];
+    });
+    
+    // Update strategy with discovered addresses
+    setStrategies(prev => 
+      prev.map(s => {
+        if (s.id === strategyId) {
+          return { 
+            ...s, 
+            discoveredAddresses: (s.discoveredAddresses || 0) + newNodes.length,
+            progress: 100,
+            status: 'completed',
+            completedAt: new Date(),
+            results: {
+              addresses: newNodes.map(n => n.id),
+              timestamp: new Date().toISOString()
+            }
+          };
+        }
+        return s;
+      })
+    );
+    
+    // Automatically start the next strategy if there is one
+    setTimeout(() => {
+      startNextStrategy();
+    }, 500);
   };
   
   // Handle node selection in graph
   const handleNodeSelect = (nodeId: string) => {
+    console.log('Selected node:', nodeId);
     setSelectedAddress(nodeId);
     
-    // Find the node type from graph data
+    // Find the node in the graph data
     const node = graphData.nodes.find(n => n.id === nodeId);
     if (node) {
-      // Find all connected edges for this node
-      const connectedEdges = graphData.edges.filter(
-        edge => edge.source === nodeId || edge.target === nodeId
-      );
-      
-      // Get all connected nodes
-      const connectedNodeIds = new Set<string>();
-      connectedEdges.forEach(edge => {
-        if (edge.source === nodeId) {
-          connectedNodeIds.add(edge.target);
-        } else {
-          connectedNodeIds.add(edge.source);
-        }
+      setSelectedNode({
+        id: node.id,
+        label: node.label,
+        type: node.type
       });
       
-      const connectedNodes = Array.from(connectedNodeIds).map(id => 
-        graphData.nodes.find(n => n.id === id)
-      ).filter(Boolean) as Node[];
-      
-      // Generate details based on actual connections
-      const details = generateRelevantAddressDetails(
-        nodeId, 
-        node.type, 
-        connectedNodes,
-        connectedEdges
-      );
+      // Get address details
+      const details = addressDetails?.address === nodeId 
+        ? addressDetails 
+        : generateRelevantAddressDetails(nodeId, node.type as NodeType);
       
       setAddressDetails(details);
     }
@@ -719,140 +1074,121 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-48px)] w-full bg-gray-900 text-white overflow-hidden">
-      <div className="h-full flex flex-col md:flex-row overflow-hidden">
-        {/* Left Panel - Strategy Control */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-b md:border-b-0 md:border-r border-gray-800 p-2 md:p-4 flex flex-col h-auto md:h-full">
-          <div className="flex-grow overflow-y-auto">
-            <StrategyControlPanel 
-              strategies={strategies}
-              onRemoveStrategy={handleRemoveStrategy}
-              onStartStrategy={handleStartStrategy}
-              onPauseStrategy={handlePauseStrategy}
-              onMoveStrategy={handleMoveStrategy}
-            />
+    <div className="flex flex-col h-full">
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-between space-y-2">
+          <h2 className="text-3xl font-bold tracking-tight">Blockchain Forensics Dashboard</h2>
+          <div className="flex items-center space-x-2">
+            <Tabs value={activeFeatureTab} onValueChange={setActiveFeatureTab} className="w-[400px]">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="graph">Graph</TabsTrigger>
+                <TabsTrigger value="features">Features</TabsTrigger>
+                <TabsTrigger value="token-holders">Token Holders</TabsTrigger>
+                <TabsTrigger value="connections">Connections</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
-          <div className="mt-2 md:mt-4 pt-2 md:pt-4 border-t border-gray-700">
-            {/* State 1: Idle - No button rendered but space is blank */}
-            {/* State 2: Ready - Show Start Investigation button when at least one strategy is selected */}
-            {investigationState === 'ready' && (
-              <button 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 md:py-3 px-4 rounded font-medium flex items-center justify-center"
-                onClick={handleStartInvestigation}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                </svg>
-                Start Investigation
-              </button>
-            )}
+        </div>
+        </div>
+        
+        
+        {activeFeatureTab === 'graph' ? (
+          // Original dashboard content
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <Card className="col-span-4">
+              <CardHeader>
+                <CardTitle>Graph Visualization</CardTitle>
+              </CardHeader>
+              <CardContent className="pl-2 h-[600px]">
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex flex-col items-center">
+                      <Spinner className="w-12 h-12 mb-4" />
+                      <div className="text-lg font-medium">Searching blockchain data...</div>
+                    </div>
+                  </div>
+                ) : (
+                  <GraphVisualization
+                    nodes={graphData.nodes}
+                    edges={graphData.edges}
+                    onNodeSelect={handleNodeSelect}
+                    selectedNode={selectedAddress}
+                  />
+                )}
+              </CardContent>
+            </Card>
+            <div className="col-span-3">
+              <div className="grid gap-4 grid-rows-2 h-full">
+                <Card className="row-span-1">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle>Investigation Control</CardTitle>
+                    <div className="flex space-x-2">
+                      {investigationState === 'idle' && (
+                        <Button size="sm" onClick={() => setShowInvestigationInput(true)}>
+                          New Investigation
+                        </Button>
+                      )}
+                      {investigationState === 'ready' && (
+                        <Button size="sm" onClick={handleStartInvestigation}>
+                          Start
+                        </Button>
+                      )}
+                      {investigationState === 'active' && (
+                        <Button size="sm" variant="outline" onClick={handlePauseInvestigation}>
+                          Pause
+                        </Button>
+                      )}
+                      {investigationState === 'paused' && (
+                        <Button size="sm" onClick={handleResumeInvestigation}>
+                          Resume
+                        </Button>
+                      )}
+                      {(investigationState === 'active' || investigationState === 'paused') && (
+                        <Button size="sm" variant="destructive" onClick={handleStopInvestigation}>
+                          Stop
+                        </Button>
+                      )}
+                      {investigationState === 'completed' && (
+                        <Button size="sm" onClick={handleStartNewInvestigation}>
+                          New Investigation
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={toggleChat}/>
             
-            {/* State 3: Active - Show Pause Investigation button when investigation is running */}
-            {investigationState === 'active' && (
-              <button 
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 md:py-3 px-4 rounded font-medium flex items-center justify-center"
-                onClick={handlePauseInvestigation}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                Pause Investigation
-              </button>
-            )}
-            
-            {/* State 4: Paused - Show Resume and Stop buttons when investigation is paused */}
-            {investigationState === 'paused' && (
-              <div className="flex space-x-2">
-                <button 
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 md:py-3 px-4 rounded font-medium flex items-center justify-center"
-                  onClick={handleResumeInvestigation}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                  </svg>
-                  Resume
-                </button>
-                <button 
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 md:py-3 px-4 rounded font-medium flex items-center justify-center"
-                  onClick={handleStopInvestigation}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
-                  </svg>
-                  Stop
-                </button>
+            {/* Chat box positioned over the graph */}
+            {isChatVisible && (
+              <div className="absolute bottom-0 right-0 w-full md:w-96 h-60 md:h-80 shadow-lg z-10">
+                <AgentChatBox
+                  onMessageSubmit={handleMessageSubmit}
+                  onClose={toggleChat}
+                  predefinedStrategies={predefinedStrategies}
+                  resetKey={chatResetKey}
+                  selectedNode={selectedNode}
+                  userAddress={userAddress || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'} // Mock user address for demo
+                />
               </div>
             )}
+          </div>
+          
+          <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col h-[50vh] md:h-full overflow-hidden">
+            {/* Top Section - Details View */}
+            <div className="h-1/2 p-2 md:p-4 border-b border-gray-800 overflow-y-auto">
+              <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Address Details</h2>
+              <DetailsView 
+                addressDetails={addressDetails}
+                selectedAddress={selectedAddress}
+              />
+            </div>
             
-            {/* State 5: Completed - Show Start New Investigation button when all strategies are completed */}
-            {investigationState === 'completed' && (
-              <button 
-                className="w-full bg-red-600 hover:bg-red-700 text-white py-2 md:py-3 px-4 rounded font-medium flex items-center justify-center"
-                onClick={handleStartNewInvestigation}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                </svg>
-                Start New Investigation
-              </button>
-            )}
-          </div>
-        </div>
-        
-        {/* Center Panel - Graph Visualization with Floating Chat */}
-        <div className="flex-1 md:flex-grow relative h-[40vh] md:h-full">
-          <div className="h-full">
-            <GraphVisualization 
-              key={graphData.nodes.length > 0 ? graphData.nodes[0].id : 'empty-graph'}
-              nodes={graphData.nodes}
-              edges={graphData.edges}
-              onNodeSelect={handleNodeSelect}
-              selectedNode={selectedAddress}
-            />
-          </div>
-          
-          {/* Floating Chat Box */}
-          <div className={`absolute bottom-4 right-4 w-[90%] md:w-[60%] lg:w-[40rem] ${isChatVisible ? 'block' : 'hidden'}`}>
-            <ChatBox 
-              onMessageSubmit={handleMessageSubmit}
-              onClose={() => setIsChatVisible(false)}
-              predefinedStrategies={predefinedStrategies}
-              resetKey={chatResetKey}
-            />
-          </div>
-          
-          {/* Chat Toggle Button (when chat is hidden) */}
-          {!isChatVisible && (
-            <button 
-              className="absolute bottom-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg"
-              onClick={toggleChat}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-            </button>
-          )}
-        </div>
-        
-        {/* Right Panel - Details and Address List */}
-        <div className="w-full md:w-64 lg:w-72 xl:w-80 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col h-[50vh] md:h-full overflow-hidden">
-          {/* Top Section - Details View */}
-          <div className="h-1/2 p-2 md:p-4 border-b border-gray-800 overflow-y-auto">
-            <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Address Details</h2>
-            <DetailsView 
-              addressDetails={addressDetails}
-              selectedAddress={selectedAddress}
-            />
-          </div>
-          
-          {/* Bottom Section - Address List */}
-          <div className="h-1/2 p-2 md:p-4 overflow-y-auto">
-            <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Addresses</h2>
-            <AddressList 
-              addresses={addresses}
-              selectedAddress={selectedAddress}
-              onAddressSelect={handleNodeSelect}
-            />
+            {/* Bottom Section - Address List */}
+            <div className="h-1/2 p-2 md:p-4 overflow-y-auto">
+              <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Addresses</h2>
+              <AddressList 
+                addresses={addresses}
+                selectedAddress={selectedAddress}
+                onAddressSelect={handleNodeSelect}
+              />
+            </div>
           </div>
         </div>
       </div>

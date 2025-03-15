@@ -22,6 +22,13 @@ export type AddressDetails = {
     asset: string;
     direction: 'incoming' | 'outgoing';
   }[];
+  balance?: {
+    asset: string;
+    value: string;
+  }[];
+  firstSeen?: Date;
+  lastSeen?: Date;
+  riskScore?: number;
 };
 
 type DetailsListViewProps = {

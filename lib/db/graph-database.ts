@@ -72,15 +72,26 @@ export class GraphDatabase {
    * @returns Query results
    */
   private async executeGremlinQuery(query: string, parameters: Record<string, any> = {}): Promise<any> {
-    const input: ExecuteGremlinQueryCommandInput = {
-      gremlinQuery: query,
-      parameters: parameters
+    const input: ExecuteQueryCommandInput = {
+      query,
+      language: 'OPEN_CYPHER',
+      parameters
     };
 
-    const command = new ExecuteGremlinQueryCommand(input);
+    const command = new ExecuteQueryCommand(input);
     const response = await this.client.send(command);
     
-    return response.result;
+    if (!response || !response.output) {
+      return null;
+    }
+    
+    // Parse the response output
+    try {
+      return JSON.parse(response.output.toString());
+    } catch (error) {
+      logger.error(`Failed to parse Gremlin query response: ${error}`);
+      return null;
+    }
   }
 
   /**
@@ -90,15 +101,26 @@ export class GraphDatabase {
    * @returns Query results
    */
   private async executeCypherQuery(query: string, parameters: Record<string, any> = {}): Promise<any> {
-    const input: ExecuteOpenCypherQueryCommandInput = {
-      openCypherQuery: query,
-      parameters: parameters
+    const input: ExecuteQueryCommandInput = {
+      query,
+      language: 'OPEN_CYPHER',
+      parameters
     };
 
-    const command = new ExecuteOpenCypherQueryCommand(input);
+    const command = new ExecuteQueryCommand(input);
     const response = await this.client.send(command);
     
-    return response.result;
+    if (!response || !response.output) {
+      return null;
+    }
+    
+    // Parse the response output
+    try {
+      return JSON.parse(response.output.toString());
+    } catch (error) {
+      logger.error(`Failed to parse Cypher query response: ${error}`);
+      return null;
+    }
   }
 
   /**
@@ -606,4 +628,184 @@ export class GraphDatabase {
     
     return result;
   }
-} 
+
+  /**
+   * Store a strategy's result directly in the graph
+   * @param strategyId Strategy ID
+   * @param result Strategy execution result
+   * @param sourceAddress The source address for the analysis
+   * @returns True if successful
+   */
+  async storeStrategyResult(
+    strategyId: string,
+    result: {
+      nodes: Array<{
+        id: string;
+        address: string;
+        type: string;
+        tags?: string[];
+        metadata?: Record<string, any>;
+      }>;
+      edges: Array<{
+        source: string;
+        target: string;
+        type: string;
+        metadata?: Record<string, any>;
+      }>;
+      summary: string;
+    },
+    sourceAddress: string
+  ): Promise<boolean> {
+    await this.ensureConnection();
+    
+    try {
+      logger.info(`Storing strategy result for ${strategyId}`);
+      
+      // Create strategy node
+      const strategyNodeId = `strategy-${strategyId}`;
+      await this.addNode('Strategy', {
+        id: strategyNodeId,
+        strategyId,
+        sourceAddress,
+        createdAt: new Date().toISOString(),
+        summary: result.summary
+      });
+      
+      // Create or update nodes
+      for (const node of result.nodes) {
+        try {
+          // Check if node exists
+          const existingNode = await this.getNode(node.id);
+          
+          if (existingNode) {
+            // Update existing node
+            const tags = [...(existingNode.tags || []), ...(node.tags || [])];
+            const uniqueTags = [...new Set(tags)]; // Ensure uniqueness
+            
+            await this.updateNodeProperty(node.id, 'tags', uniqueTags);
+            
+            // Update metadata
+            if (node.metadata) {
+              const updatedMetadata = {
+                ...(existingNode.metadata || {}),
+                ...node.metadata
+              };
+              await this.updateNodeProperty(node.id, 'metadata', updatedMetadata);
+            }
+          } else {
+            // Create new node
+            await this.addNode(node.type, {
+              id: node.id,
+              address: node.address,
+              tags: node.tags || [],
+              metadata: node.metadata || {},
+              createdAt: new Date().toISOString()
+            });
+          }
+          
+          // Connect node to strategy
+          await this.addEdge(
+            strategyNodeId,
+            node.id,
+            'DISCOVERED',
+            {
+              createdAt: new Date().toISOString()
+            }
+          );
+        } catch (error) {
+          logger.error(`Failed to store node ${node.id}: ${error}`);
+        }
+      }
+      
+      // Create edges
+      for (const edge of result.edges) {
+        try {
+          await this.addEdge(
+            edge.source,
+            edge.target,
+            edge.type,
+            {
+              strategyId,
+              metadata: edge.metadata || {},
+              createdAt: new Date().toISOString()
+            }
+          );
+        } catch (error) {
+          logger.error(`Failed to store edge from ${edge.source} to ${edge.target}: ${error}`);
+        }
+      }
+      
+      logger.info(`Successfully stored strategy result for ${strategyId}`);
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to store strategy result: ${errorMessage}`);
+      throw new Error(`Failed to store strategy result: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Find paths between addresses using a specific strategy
+   * @param fromAddress Source address
+   * @param toAddress Target address
+   * @param strategyType Type of strategy to use for path finding
+   * @param maxDepth Maximum path depth
+   * @returns Array of paths
+   */
+  async findPathsByStrategy(
+    fromAddress: string,
+    toAddress: string,
+    strategyType: string,
+    maxDepth: number = 5
+  ): Promise<Array<{nodes: Record<string, any>[], edges: Record<string, any>[]}>
+  > {
+    await this.ensureConnection();
+    
+    try {
+      logger.info(`Finding paths from ${fromAddress} to ${toAddress} using ${strategyType} strategy`);
+      
+      // Use path finding algorithm with edge type filter
+      const query = `
+        g.V().has('id', '${fromAddress}')
+          .repeat(
+            outE().has('type', '${strategyType}').inV().simplePath()
+          )
+          .until(has('id', '${toAddress}').or().loops().is(gt(${maxDepth})))
+          .hasId('${toAddress}')
+          .path()
+      `;
+      
+      const result = await this.executeGremlinQuery(query);
+      
+      if (!result || result.length === 0) {
+        return [];
+      }
+      
+      // Format the results
+      return result.map((path: any) => {
+        const pathObjects = path.objects;
+        const nodes: Record<string, any>[] = [];
+        const edges: Record<string, any>[] = [];
+        
+        pathObjects.forEach((obj: any, index: number) => {
+          if (index % 2 === 0) {
+            // Even indices are vertices
+            nodes.push(this.formatNodeResult(obj));
+          } else {
+            // Odd indices are edges
+            edges.push(this.formatEdgeResult(obj));
+          }
+        });
+        
+        return { nodes, edges };
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to find paths by strategy: ${errorMessage}`);
+      throw new Error(`Failed to find paths by strategy: ${errorMessage}`);
+    }
+  }
+}
+
+// Create and export an instance
+export const graphDatabase = new GraphDatabase(); 

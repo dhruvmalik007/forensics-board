@@ -343,7 +343,7 @@ export const generateRelevantAddressDetails = (
     type: type as any,
     tags,
     transactions,
-    balance: balance as any, // Type casting to match AddressDetails
+    balance,
     firstSeen,
     lastSeen,
     riskScore
