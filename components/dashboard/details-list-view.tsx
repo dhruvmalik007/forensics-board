@@ -21,6 +21,7 @@ export type AddressDetails = {
     value: string;
     asset: string;
     direction: 'incoming' | 'outgoing';
+    proofs?: string;
   }[];
 };
 
