@@ -10,9 +10,10 @@ type ChatBoxProps = {
   onClose: () => void;
   predefinedStrategies: { id: string; name: string; description: string }[];
   resetKey?: number;
+  messages?: { text: string; sender: 'user' | 'system' }[];
 };
 
-export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetKey = 0 }: ChatBoxProps) {
+export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetKey = 0, messages = [] }: ChatBoxProps) {
   const [message, setMessage] = useState('');
   const [isExpanded, setIsExpanded] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -20,6 +21,16 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
   const [keepSuggestionsOpen, setKeepSuggestionsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Scroll to bottom when messages change
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
   
   // Focus the input when the component mounts
   useEffect(() => {
@@ -36,6 +47,21 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
       inputRef.current.focus();
     }
   }, [resetKey]);
+  
+  // Check if an address has been submitted by examining messages
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Check all messages for an Ethereum address
+      for (const msg of messages) {
+        if (msg.sender === 'user' && 
+            msg.text.startsWith('0x') && 
+            msg.text.length === 42) {
+          setHasAddressSubmitted(true);
+          break;
+        }
+      }
+    }
+  }, [messages]);
   
   // Handle clicks outside the suggestions box
   useEffect(() => {
@@ -59,25 +85,12 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim()) {
-      // Check if this is an Ethereum address (simple check for 0x prefix and length)
-      const isEthereumAddress = message.trim().startsWith('0x') && message.trim().length === 42;
-      
-      // If it's an address and no address has been submitted yet, set the flag
-      if (isEthereumAddress && !hasAddressSubmitted) {
-        setHasAddressSubmitted(true);
-      }
-      
       onMessageSubmit(message.trim());
       setMessage('');
     }
   };
   
   const handleSuggestionClick = (suggestion: string) => {
-    // If the suggestion is an address and no address has been submitted yet, set the flag
-    if (suggestion.includes('0x') && suggestion.length >= 42 && !hasAddressSubmitted) {
-      setHasAddressSubmitted(true);
-    }
-    
     onMessageSubmit(suggestion);
     setShowSuggestions(false);
     setKeepSuggestionsOpen(false);
@@ -86,6 +99,9 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
   const openSuggestions = () => {
     setShowSuggestions(true);
     setKeepSuggestionsOpen(true);
+    
+    // Log for debugging
+    console.log('Opening suggestions, showSuggestions:', true, 'keepSuggestionsOpen:', true);
   };
   
   const handleInputFocus = () => {
@@ -126,26 +142,58 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
       {isExpanded && (
         <>
           {/* Chat messages would go here - increased height from h-48 to h-72 (1.5x taller) */}
-          <div className="p-3 h-72 overflow-y-auto bg-gray-900">
-            {/* No default welcome messages in the chat as per user preference */}
+          <div className="p-3 h-72 overflow-y-auto bg-gray-900" id="chat-messages">
+            {/* Render chat history */}
+            {messages.map((message, index) => (
+              <div key={index} className={`mb-2 flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div 
+                  className={`${
+                    message.sender === 'user' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-700 text-white'
+                  } p-2 rounded-lg inline-block max-w-[80%]`}
+                >
+                  {message.sender === 'system' && 
+                   message.text === "What do you want to check? Write an idea or sleuth strat" ? (
+                    <span>
+                      What do you want to check? Write an idea or{' '}
+                      <button 
+                        type="button"
+                        className="underline text-white hover:text-gray-200"
+                        onClick={() => {
+                          openSuggestions();
+                        }}
+                      >
+                        sleuth strat
+                      </button>
+                    </span>
+                  ) : message.sender === 'system' ? (
+                    message.text
+                  ) : (
+                    message.text
+                  )}
+                </div>
+              </div>
+            ))}
             
-            {/* Example message - only show after address submission */}
-            {hasAddressSubmitted && (
+            {/* Example message - only show after address submission if no messages */}
+            {hasAddressSubmitted && messages.length === 0 && (
               <div className="mb-2">
                 <div className="bg-blue-600 text-white p-2 rounded-lg inline-block max-w-[80%]">
-                  What do you want to check? Write an idea or 
+                  What do you want to check? Write an idea or{' '}
                   <button 
-                    className="ml-1 underline text-white hover:text-gray-200"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openSuggestions();
-                    }}
+                    type="button"
+                    className="underline text-white hover:text-gray-200"
+                    onClick={() => openSuggestions()}
                   >
                     sleuth strat
                   </button>
                 </div>
               </div>
             )}
+            
+            {/* Scroll to bottom anchor */}
+            <div ref={messagesEndRef} />
           </div>
           
           {/* Input area */}
@@ -156,7 +204,7 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
               onChange={(e) => setMessage(e.target.value)}
               placeholder={
                 hasAddressSubmitted
-                  ? "What do you want to check? Write an idea or pick a sleuthing strategy"
+                  ? "What do you want to check? Write an idea or sleuth strat"
                   : "Enter a blockchain address to start investigation..."
               }
               className="flex-grow bg-gray-600 text-white border-gray-600 focus:ring-blue-500"
@@ -172,7 +220,7 @@ export function ChatBox({ onMessageSubmit, onClose, predefinedStrategies, resetK
           {showSuggestions && hasAddressSubmitted && (
             <div 
               ref={suggestionsRef}
-              className="absolute bottom-[4.5rem] left-0 right-0 bg-gray-700 border border-gray-600 rounded-t-lg overflow-hidden"
+              className="absolute bottom-[4.5rem] left-0 right-0 bg-gray-700 border border-gray-600 rounded-t-lg overflow-hidden z-50"
             >
               <div className="p-2 text-sm text-gray-300 flex justify-between">
                 <span>Suggestions:</span>

@@ -182,6 +182,20 @@ export default function DashboardPage() {
       }];
       setAddressList(addressList);
       
+      // Initialize the ref with the main address
+      allAddressesRef.current = new Set([message]);
+      
+      // Add a system response for address submission after a 1-second delay
+      setTimeout(() => {
+        setChatMessages(prev => [
+          ...prev,
+          { 
+            text: "What do you want to check? Write an idea or sleuth strat", 
+            sender: 'system' 
+          }
+        ]);
+      }, 1000); // 1000ms = 1 second
+      
       // Do NOT start any strategies automatically
     } else if (message.toLowerCase().includes('run strategy') || message.toLowerCase().includes('strategy')) {
       // If the message mentions running a strategy, extract the strategy name
@@ -197,6 +211,33 @@ export default function DashboardPage() {
         if (strategy && selectedAddress) {
           // Add the strategy to the list if it's not already there
           handleAddStrategyToPanel(strategy);
+          
+          // Add a system response confirming the strategy addition
+          setChatMessages(prev => [
+            ...prev,
+            { 
+              text: `Added "${strategy.name}" strategy to your investigation. You can start the investigation when ready.`, 
+              sender: 'system' 
+            }
+          ]);
+        } else if (!selectedAddress) {
+          // If no address is selected, prompt the user to enter an address first
+          setChatMessages(prev => [
+            ...prev,
+            { 
+              text: "Please enter a blockchain address first to start your investigation.", 
+              sender: 'system' 
+            }
+          ]);
+        } else {
+          // If strategy not found
+          setChatMessages(prev => [
+            ...prev,
+            { 
+              text: `I couldn't find a strategy named "${strategyName}". Please choose from the available strategies.`, 
+              sender: 'system' 
+            }
+          ]);
         }
       } else {
         // If no specific strategy was mentioned, but the message mentions strategy
@@ -209,12 +250,38 @@ export default function DashboardPage() {
               sender: 'system' 
             }
           ]);
+        } else {
+          // If no address is selected, prompt the user to enter an address first
+          setChatMessages(prev => [
+            ...prev,
+            { 
+              text: "Please enter a blockchain address first to start your investigation.", 
+              sender: 'system' 
+            }
+          ]);
         }
       }
     } else {
-      // For other types of messages, just log them for now
-      console.log(`Received message: ${message}`);
-      // In a real app, you would process the message and update the UI accordingly
+      // For other types of messages
+      if (!selectedAddress) {
+        // If no address is selected, prompt the user to enter an address
+        setChatMessages(prev => [
+          ...prev,
+          { 
+            text: "Please enter a blockchain address to start your investigation.", 
+            sender: 'system' 
+          }
+        ]);
+      } else {
+        // Generic response for other messages when an address is selected
+        setChatMessages(prev => [
+          ...prev,
+          { 
+            text: "You can run a strategy to analyze this address. Type 'strategy' or click the suggestions to see available options.", 
+            sender: 'system' 
+          }
+        ]);
+      }
     }
   };
   
@@ -612,8 +679,6 @@ export default function DashboardPage() {
                     ...newAddressItems.filter(item => !prev.some(existing => existing.address === item.address))
                   ]);
                 }
-              } else {
-                console.log('No new nodes or edges found in API response');
               }
             } else {
               console.error('API response indicates failure:', response);
@@ -1211,6 +1276,7 @@ export default function DashboardPage() {
               onClose={() => setIsChatVisible(false)}
               predefinedStrategies={filteredPredefinedStrategies}
               resetKey={chatResetKey}
+              messages={chatMessages}
             />
           </div>
           
